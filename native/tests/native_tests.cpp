@@ -457,7 +457,7 @@ bool test_guest_process_lifecycle() {
     }
 
     auto overflowing_x64_image = image;
-    overflowing_x64_image.info.image_base = UINT64_MAX - 0x100U;
+    overflowing_x64_image.info.image_base = std::numeric_limits<std::uint64_t>::max() - 0x100U;
     std::string x64_range_error;
     if (GuestProcess::create(79U, std::move(overflowing_x64_image), x64_range_error)) {
         return false;
