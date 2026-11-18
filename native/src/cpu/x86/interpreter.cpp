@@ -265,6 +265,26 @@ StepResult Interpreter::step(
         return StepResult::kRunning;
     }
 
+    if (opcode == 0x74U || opcode == 0x75U) {
+        std::uint8_t displacement = 0U;
+        if (!fetch_u8(memory, state.eip, displacement)) return StepResult::kMemoryFault;
+        const bool zero = (state.eflags & kZeroFlag) != 0U;
+        if ((opcode == 0x74U && zero) || (opcode == 0x75U && !zero))
+            state.eip = static_cast<std::uint32_t>(static_cast<std::int64_t>(state.eip) + static_cast<std::int8_t>(displacement));
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+    if (opcode == 0x0FU) {
+        std::uint8_t condition = 0U; std::uint32_t displacement = 0U;
+        if (!fetch_u8(memory, state.eip, condition) || (condition != 0x84U && condition != 0x85U) ||
+            !fetch_u32(memory, state.eip, displacement)) return StepResult::kUnsupportedInstruction;
+        const bool zero = (state.eflags & kZeroFlag) != 0U;
+        if ((condition == 0x84U && zero) || (condition == 0x85U && !zero))
+            state.eip = static_cast<std::uint32_t>(static_cast<std::int64_t>(state.eip) + static_cast<std::int32_t>(displacement));
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
     if (opcode == 0xEBU) {
         std::uint8_t raw_displacement = 0;
         if (!fetch_u8(memory, state.eip, raw_displacement)) {
