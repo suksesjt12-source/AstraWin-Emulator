@@ -5,11 +5,19 @@ namespace astrawin::sync {
 void GuestTimer::arm(
     std::chrono::milliseconds delay,
     std::chrono::milliseconds period) {
+    constexpr auto kMaximumDuration = std::chrono::hours(24 * 365);
+    const auto maximum_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(kMaximumDuration);
+
     if (delay < std::chrono::milliseconds::zero()) {
         delay = std::chrono::milliseconds::zero();
+    } else if (delay > maximum_ms) {
+        delay = maximum_ms;
     }
     if (period < std::chrono::milliseconds::zero()) {
         period = std::chrono::milliseconds::zero();
+    } else if (period > maximum_ms) {
+        period = maximum_ms;
     }
 
     std::lock_guard lock(mutex_);
