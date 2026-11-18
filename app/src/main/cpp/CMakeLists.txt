@@ -15,6 +15,7 @@ add_library(astrawin_core STATIC
     ${ASTRAWIN_ROOT}/native/src/filesystem/guest_path_mapper.cpp
     ${ASTRAWIN_ROOT}/native/src/sync/guest_event.cpp
     ${ASTRAWIN_ROOT}/native/src/sync/guest_timer.cpp
+    ${ASTRAWIN_ROOT}/native/src/graphics/headless_device.cpp
 )
 
 target_include_directories(astrawin_core PUBLIC
