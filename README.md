@@ -8,7 +8,7 @@ This repository contains an Android/JNI shell, a native C++20 core, bounds-check
 
 The CPU interpreters support only tiny instruction subsets and are smoke-test foundations, not general x86 emulators. AstraWin cannot yet load and run ordinary Windows applications or games. The initial Win32 API registry/environment implements only GetLastError, SetLastError, GetTickCount64, and GetCurrentProcessId. The environment is intended to be instantiated once per guest thread; guest ABI marshalling and broader Win32 coverage are not implemented.
 
-A basic guest process/thread lifecycle model is present. PE image storage can be moved into guest memory to avoid an extra full-image copy; guest virtual reads/writes preserve the PE ImageBase, and 32-bit/64-bit address-range overflow is rejected. Guest thread creation is capped. A sandboxed Windows path mapper accepts explicit drive-absolute paths such as C:\Games\app.exe and rejects relative/drive-relative paths, traversal, UNC paths, alternate data streams, and symlink escapes. It is not a file I/O implementation.
+A basic guest process/thread lifecycle model is present. PE image storage can be moved into guest memory to avoid an extra full-image copy; guest virtual reads/writes preserve the PE ImageBase, and invalid architecture metadata or 32-bit/64-bit address-range overflow is rejected. Guest thread creation is capped. A sandboxed Windows path mapper accepts explicit drive-absolute paths such as C:\Games\app.exe and rejects relative/drive-relative paths, traversal, UNC paths, alternate data streams, and symlink escapes. It is not a file I/O implementation.
 
 Manual/auto-reset event and one-shot/periodic timer primitives are included. Timer durations are clamped to one year to avoid monotonic-clock overflow. A backend-neutral graphics device contract and a headless validation backend are included; there is no on-screen Vulkan or OpenGL ES renderer yet.
 
@@ -32,7 +32,7 @@ Run the host-native tests:
     cmake --build build --parallel
     ctest --test-dir build --output-on-failure
 
-GitHub Actions runs native tests first, builds the Android debug APK, checks that the APK contains the ARM64 native library and no other native ABI, then uploads the APK as a workflow artifact. A successful build still does not prove Windows application compatibility.
+GitHub Actions runs native tests with AddressSanitizer and UndefinedBehaviorSanitizer, builds the Android debug APK, checks that the APK contains the ARM64 native library and no other native ABI, then uploads the APK as a workflow artifact. The workflow uses maintained action releases, but its run result still needs verification in GitHub Actions. A successful build does not prove Windows application compatibility.
 
 ## Important compatibility note
 
