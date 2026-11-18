@@ -19,45 +19,45 @@ std::optional<GuestProcess> GuestProcess::create(
     pe::LoadedPeImage image,
     std::string& error) {
     try {
-    if (process_id == 0U) {
-        error = "Process identifier must be non-zero";
-        return std::nullopt;
-    }
-    if ((image.info.architecture != pe::PeArchitecture::kX86 &&
-         image.info.architecture != pe::PeArchitecture::kX64) ||
-        image.bytes.empty() ||
-        image.bytes.size() > pe::PeImageLoader::kMaximumImageSize ||
-        image.size_of_image != image.bytes.size() ||
-        image.info.entry_point_rva >= image.bytes.size() ||
-        image.info.is_64_bit !=
-            (image.info.architecture == pe::PeArchitecture::kX64)) {
-        error = "Loaded image metadata or entry point is invalid";
-        return std::nullopt;
-    }
-
-    const auto image_size = static_cast<std::uint64_t>(image.bytes.size());
-    const auto image_base = image.info.image_base;
-    if (image_base > std::numeric_limits<std::uint64_t>::max() - image_size) {
-        error = "PE image virtual address range overflows";
-        return std::nullopt;
-    }
-    const auto image_end = image_base + image_size;
-    if (!image.info.is_64_bit && image_end > (1ULL << 32U)) {
-        error = "32-bit PE image exceeds the 32-bit guest address space";
-        return std::nullopt;
-    }
-
-    memory::GuestMemory memory(std::move(image.bytes), image_base);
-
-    std::vector<GuestThread> threads;
-    threads.push_back(GuestThread{
-        .id = 1U,
-        .instruction_pointer = image_base + image.info.entry_point_rva,
-        .state = ThreadState::kReady
-    });
-
-    error.clear();
-    return GuestProcess(process_id, std::move(memory), std::move(threads));
+        if (process_id == 0U) {
+            error = "Process identifier must be non-zero";
+            return std::nullopt;
+        }
+        if ((image.info.architecture != pe::PeArchitecture::kX86 &&
+             image.info.architecture != pe::PeArchitecture::kX64) ||
+            image.bytes.empty() ||
+            image.bytes.size() > pe::PeImageLoader::kMaximumImageSize ||
+            image.size_of_image != image.bytes.size() ||
+            image.info.entry_point_rva >= image.bytes.size() ||
+            image.info.is_64_bit !=
+                (image.info.architecture == pe::PeArchitecture::kX64)) {
+            error = "Loaded image metadata or entry point is invalid";
+            return std::nullopt;
+        }
+    
+        const auto image_size = static_cast<std::uint64_t>(image.bytes.size());
+        const auto image_base = image.info.image_base;
+        if (image_base > std::numeric_limits<std::uint64_t>::max() - image_size) {
+            error = "PE image virtual address range overflows";
+            return std::nullopt;
+        }
+        const auto image_end = image_base + image_size;
+        if (!image.info.is_64_bit && image_end > (1ULL << 32U)) {
+            error = "32-bit PE image exceeds the 32-bit guest address space";
+            return std::nullopt;
+        }
+    
+        memory::GuestMemory memory(std::move(image.bytes), image_base);
+    
+        std::vector<GuestThread> threads;
+        threads.push_back(GuestThread{
+            .id = 1U,
+            .instruction_pointer = image_base + image.info.entry_point_rva,
+            .state = ThreadState::kReady
+        });
+    
+        error.clear();
+        return GuestProcess(process_id, std::move(memory), std::move(threads));
     } catch (const std::bad_alloc&) {
         error = "Insufficient memory to create the guest process";
         return std::nullopt;
