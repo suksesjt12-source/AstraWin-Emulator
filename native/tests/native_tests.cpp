@@ -1,4 +1,6 @@
 #include "astrawin/pe/pe_loader.h"
+#include "astrawin/win32/api_registry.h"
+#include "astrawin/win32/environment.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -180,10 +182,43 @@ bool test_pe_section_mapping() {
     return mapped && malformed_rejected;
 }
 
+
+bool test_win32_api_environment() {
+    using astrawin::win32::ApiRegistry;
+    using astrawin::win32::Environment;
+
+    const auto set_last_error = ApiRegistry::resolve("KeRnEl32.DlL", "SetLastError");
+    const auto get_last_error = ApiRegistry::resolve("kernelbase.dll", "GetLastError");
+    const auto get_pid = ApiRegistry::resolve("kernel32.dll", "GetCurrentProcessId");
+    const auto unknown = ApiRegistry::resolve("user32.dll", "MessageBoxW");
+    if (!set_last_error || !get_last_error || !get_pid || unknown) {
+        return false;
+    }
+
+    Environment environment(4242U);
+    std::uint64_t result = 0;
+    const std::uint64_t error_argument = 5U;
+    if (!environment.invoke(*set_last_error, std::span<const std::uint64_t>(&error_argument, 1U), result)) {
+        return false;
+    }
+    if (!environment.invoke(*get_last_error, {}, result) || result != 5U) {
+        return false;
+    }
+    if (!environment.invoke(*get_pid, {}, result) || result != 4242U) {
+        return false;
+    }
+    const std::uint64_t unexpected_argument = 1U;
+    if (environment.invoke(*get_pid, std::span<const std::uint64_t>(&unexpected_argument, 1U), result)) {
+        return false;
+    }
+    return environment.last_error() == 87U;
+}
+
 }  // namespace
 
 int main() {
     const bool pe_load_ok = test_pe_section_mapping();
+    const bool win32_ok = test_win32_api_environment();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -195,5 +230,6 @@ int main() {
     std::cout << "PE section mapping: " << (pe_load_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok ? 0 : 1;
+    std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok ? 0 : 1;
 }
