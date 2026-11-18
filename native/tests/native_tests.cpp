@@ -948,6 +948,36 @@ bool test_win32_call_dispatcher() {
         return false;
     }
 
+    // Exercise the real x86 import-call sequence: CALL [absolute IAT slot],
+    // thunk dispatch, return to caller, then execute the next instruction.
+    constexpr std::uint32_t x86_iat_base = 0x4000U;
+    constexpr std::uint32_t x86_iat_slot = x86_iat_base + 0x80U;
+    astrawin::memory::GuestMemory x86_iat_memory(256U, x86_iat_base);
+    std::vector<std::uint8_t> x86_iat_code(256U, 0x90U);
+    x86_iat_code[0] = 0xFFU;
+    x86_iat_code[1] = 0x15U; // CALL DWORD PTR [absolute address]
+    x86_iat_code[2] = static_cast<std::uint8_t>(x86_iat_slot & 0xFFU);
+    x86_iat_code[3] = static_cast<std::uint8_t>((x86_iat_slot >> 8U) & 0xFFU);
+    x86_iat_code[4] = static_cast<std::uint8_t>((x86_iat_slot >> 16U) & 0xFFU);
+    x86_iat_code[5] = static_cast<std::uint8_t>((x86_iat_slot >> 24U) & 0xFFU);
+    x86_iat_code[6] = 0xF4U;
+    if (!x86_iat_memory.write(x86_iat_base, x86_iat_code) ||
+        !x86_iat_memory.write_value(
+            x86_iat_slot, static_cast<std::uint32_t>(get_pid_thunk))) {
+        return false;
+    }
+    astrawin::cpu::x86::CpuState x86_iat_state{};
+    x86_iat_state.eip = x86_iat_base;
+    x86_iat_state.gpr[4] = x86_iat_base + 256U;
+    if (x86_dispatcher.run_x86(
+            x86_iat_state, x86_iat_memory, x86_environment, 8U) !=
+            astrawin::cpu::x86::StepResult::kHalted ||
+        x86_iat_state.gpr[0] != 7654U ||
+        x86_iat_state.gpr[4] != x86_iat_base + 256U ||
+        x86_iat_state.eip != x86_iat_base + 7U) {
+        return false;
+    }
+
     CallDispatcher x64_dispatcher(true);
     std::uint64_t x64_set_error_thunk = 0U;
     std::uint64_t x64_pid_thunk = 0U;
@@ -995,9 +1025,37 @@ bool test_win32_call_dispatcher() {
     }
 
     astrawin::cpu::x86_64::CpuState wrong_mode_state{};
-    return x86_dispatcher.step_x64(
-               wrong_mode_state, x64_memory, x64_environment) ==
-           astrawin::cpu::x86_64::StepResult::kUnsupportedInstruction;
+    if (x86_dispatcher.step_x64(
+            wrong_mode_state, x64_memory, x64_environment) !=
+        astrawin::cpu::x86_64::StepResult::kUnsupportedInstruction) {
+        return false;
+    }
+
+    // In 64-bit mode FF 15 uses RIP-relative addressing to find the IAT slot.
+    constexpr std::uint64_t x64_iat_base = 0x5000U;
+    constexpr std::uint64_t x64_iat_slot = x64_iat_base + 0x80U;
+    astrawin::memory::GuestMemory x64_iat_memory(256U, x64_iat_base);
+    std::vector<std::uint8_t> x64_iat_code(256U, 0x90U);
+    x64_iat_code[0] = 0xFFU;
+    x64_iat_code[1] = 0x15U; // CALL QWORD PTR [RIP + disp32]
+    x64_iat_code[2] = 0x7AU; // base + 6 + 0x7A == IAT slot
+    x64_iat_code[3] = 0U;
+    x64_iat_code[4] = 0U;
+    x64_iat_code[5] = 0U;
+    x64_iat_code[6] = 0xF4U;
+    if (!x64_iat_memory.write(x64_iat_base, x64_iat_code) ||
+        !x64_iat_memory.write_value(x64_iat_slot, x64_pid_thunk)) {
+        return false;
+    }
+    astrawin::cpu::x86_64::CpuState x64_iat_state{};
+    x64_iat_state.rip = x64_iat_base;
+    x64_iat_state.gpr[4] = x64_iat_base + 256U;
+    return x64_dispatcher.run_x64(
+               x64_iat_state, x64_iat_memory, x64_environment, 8U) ==
+               astrawin::cpu::x86_64::StepResult::kHalted &&
+           x64_iat_state.gpr[0] == 9876U &&
+           x64_iat_state.gpr[4] == x64_iat_base + 256U &&
+           x64_iat_state.rip == x64_iat_base + 7U;
 }
 
 bool test_guest_process_lifecycle() {
