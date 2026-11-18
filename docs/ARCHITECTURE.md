@@ -8,7 +8,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 - Native C++20 core built for arm64-v8a.
 - Bounds-checked guest-memory buffer with a move-initialization path and PE ImageBase-aware guest virtual addressing; address-range overflow is rejected.
 - Small x86 and x86-64 interpreter subsets for smoke testing; flags and instruction coverage are incomplete.
-- PE32/PE32+ header inspection and bounded section mapping. The mapper validates SizeOfHeaders, raw/virtual ranges, overlap, and executable entry-point placement. Relocations and import resolution are not implemented.
+- PE32/PE32+ header inspection and bounded section mapping. The loader validates SizeOfHeaders, raw/virtual ranges, overlap, and executable entry-point placement; it applies x86 HIGHLOW and x64 DIR64 base relocations. Import descriptors and thunk/name/ordinal records are bounds-checked and enumerated. A caller-supplied callback can resolve symbols and populate the IAT; no built-in Windows DLL export resolver or broad Win32 API address map exists yet.
 - A small Win32 API name registry and environment for four kernel32/kernelbase calls. One environment instance is intended per guest thread so last-error state remains thread-local; guest ABI marshalling is not implemented. GetTickCount64 uses the host monotonic clock.
 - A basic guest process/thread lifecycle model with an image-memory move path, ImageBase-aware entrypoints, architecture/range checks and a thread-count cap. There is no scheduler, CPU context switching, or process isolation.
 - Windows drive-absolute path mapping into an Android sandbox with traversal, UNC, alternate-stream, relative-path, and symlink-escape checks. This is not a guest file I/O layer.
@@ -18,7 +18,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 
 ## Execution model planned
 
-1. Android UI selects and manages a guest executable.
+1. Android UI selects a guest executable and inspects its PE header; full session management is not implemented.
 2. The PE loader validates and maps supported PE sections into guest memory.
 3. The CPU core interprets guest instructions, then later may add a tested ARM64 JIT.
 4. A Win32 compatibility layer supplies the subset of operating-system services required by a target program.
