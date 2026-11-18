@@ -37,8 +37,8 @@ public:
     }
 
 private:
-    std::vector<std::uint8_t> bytes_;
     std::uint64_t base_address_{0U};
+    std::vector<std::uint8_t> bytes_;
 };
 
 }  // namespace astrawin::memory
