@@ -176,10 +176,27 @@ bool test_pe32_plus_inspection() {
     const bool invalid_optional_rejected =
         !astrawin::pe::PeParser::inspect(truncated_optional, info, error);
 
+    const auto put16_in = [](
+        std::vector<std::uint8_t>& target,
+        std::size_t offset,
+        std::uint16_t value) {
+        target[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+        target[offset + 1U] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    };
+    const auto put32_in = [](
+        std::vector<std::uint8_t>& target,
+        std::size_t offset,
+        std::uint32_t value) {
+        for (std::size_t i = 0; i < 4U; ++i) {
+            target[offset + i] =
+                static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+        }
+    };
+
     auto pe32 = bytes;
-    put16(pe32, pe + 4U, 0x014CU);
-    put16(pe32, optional, 0x010BU);
-    put32(pe32, optional + 28U, 0x00400000U);
+    put16_in(pe32, pe + 4U, 0x014CU);
+    put16_in(pe32, optional, 0x010BU);
+    put32_in(pe32, optional + 28U, 0x00400000U);
     astrawin::pe::PeImageInfo pe32_info{};
     std::string pe32_error;
     const bool pe32_parsed =
@@ -189,7 +206,7 @@ bool test_pe32_plus_inspection() {
         pe32_info.image_base == 0x00400000U;
 
     auto mismatched_format = bytes;
-    put16(mismatched_format, pe + 4U, 0x014CU);
+    put16_in(mismatched_format, pe + 4U, 0x014CU);
     std::string mismatch_error;
     const bool mismatched_format_rejected =
         !astrawin::pe::PeParser::inspect(
