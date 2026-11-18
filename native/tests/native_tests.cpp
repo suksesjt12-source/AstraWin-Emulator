@@ -336,9 +336,19 @@ bool test_guest_process_lifecycle() {
 bool test_guest_path_mapper() {
     namespace fs = std::filesystem;
     const auto root = fs::temp_directory_path() / "astrawin_path_mapper_test";
+    const auto outside = fs::temp_directory_path() / "astrawin_path_mapper_outside";
     std::error_code ec;
-    fs::create_directories(root, ec);
+    fs::remove_all(root, ec);
+    ec.clear();
+    fs::remove_all(outside, ec);
+    ec.clear();
+    fs::create_directories(root / "drive_c", ec);
     if (ec) {
+        return false;
+    }
+    fs::create_directories(outside, ec);
+    if (ec) {
+        fs::remove_all(root, ec);
         return false;
     }
 
@@ -362,9 +372,21 @@ bool test_guest_path_mapper() {
     const bool unc_rejected = !mapper.resolve(
         "\\\\server\\share\\file.exe", rejected, unc_error);
 
+    ec.clear();
+    fs::create_directory_symlink(outside, root / "drive_c" / "escape", ec);
+    const bool symlink_created = !ec;
+    bool symlink_escape_rejected = false;
+    if (symlink_created) {
+        std::string symlink_error;
+        symlink_escape_rejected = !mapper.resolve(
+            "C:\\escape\\outside.txt", rejected, symlink_error);
+    }
+
     fs::remove_all(root, ec);
+    fs::remove_all(outside, ec);
     return mapped && expected_path && traversal_rejected &&
-           stream_rejected && unc_rejected;
+           stream_rejected && unc_rejected &&
+           symlink_created && symlink_escape_rejected;
 }
 
 
