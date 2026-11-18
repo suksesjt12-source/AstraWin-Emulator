@@ -54,17 +54,22 @@ bool GuestPathMapper::resolve(
         return false;
     }
 
-    std::string drive = "c";
-    std::size_t path_start = 0;
-    if (normalized.size() >= 2U &&
-        is_drive_letter(normalized[0]) &&
-        normalized[1] == ':') {
-        drive.assign(1U, static_cast<char>(
-            std::tolower(static_cast<unsigned char>(normalized[0]))));
-        path_start = 2U;
-        if (path_start < normalized.size() && normalized[path_start] == '/') {
-            ++path_start;
+    if (normalized.size() < 2U ||
+        !is_drive_letter(normalized[0]) ||
+        normalized[1] != ':') {
+        error = "Guest path must include an explicit Windows drive letter";
+        return false;
+    }
+
+    std::string drive(1U, static_cast<char>(
+        std::tolower(static_cast<unsigned char>(normalized[0]))));
+    std::size_t path_start = 2U;
+    if (path_start < normalized.size()) {
+        if (normalized[path_start] != '/') {
+            error = "Drive-relative paths are not supported";
+            return false;
         }
+        ++path_start;
     }
 
     std::filesystem::path relative = std::filesystem::path("drive_" + drive);
