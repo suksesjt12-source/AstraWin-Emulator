@@ -1,10 +1,14 @@
 #include "astrawin/memory/guest_memory.h"
 
 #include <algorithm>
+#include <utility>
 
 namespace astrawin::memory {
 
 GuestMemory::GuestMemory(std::size_t size) : bytes_(size, 0) {}
+
+GuestMemory::GuestMemory(std::vector<std::uint8_t> bytes)
+    : bytes_(std::move(bytes)) {}
 
 std::size_t GuestMemory::size() const noexcept {
     return bytes_.size();
