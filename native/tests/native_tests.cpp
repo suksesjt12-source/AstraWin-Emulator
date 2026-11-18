@@ -545,6 +545,14 @@ bool test_pe_relocations_and_imports() {
         malformed_relocation_file, malformed_relocation_image,
         malformed_relocation_error, relocation64_options);
 
+    auto empty_relocation_file = make_pe(true, true, false);
+    put16(empty_relocation_file, 0x508U, 0U);
+    astrawin::pe::LoadedPeImage empty_relocation_image{};
+    std::string empty_relocation_error;
+    const bool empty_relocation_rejected = !astrawin::pe::PeImageLoader::load(
+        empty_relocation_file, empty_relocation_image,
+        empty_relocation_error, relocation64_options);
+
     auto import_file = make_pe(true, false, true);
     astrawin::pe::LoadedPeImage unresolved_image{};
     std::string unresolved_error;
@@ -581,7 +589,7 @@ bool test_pe_relocations_and_imports() {
 
     return relocation64_value_ok && relocation32_value_ok &&
            missing_relocation_rejected && malformed_relocation_rejected &&
-           import_enumeration_ok && import_resolution_ok;
+           empty_relocation_rejected && import_enumeration_ok && import_resolution_ok;
 }
 
 bool test_win32_api_environment() {
