@@ -7,8 +7,8 @@ The stages are intended to run sequentially without asking for approval at every
 | 1 | Repository structure, CMake and Android Gradle project | Implemented; CI validation pending |
 | 2 | ARM64 native runtime and Android JNI bridge | Implemented; CI validation pending |
 | 3 | Guest memory foundation and bounds checks | Bounds-checked move-initialized memory with guest virtual base; tests cover out-of-range access and address overflow |
-| 4 | x86 instruction decoder and 32-bit execution subset | Limited MOV/ADD/branch, PUSH/POP register/immediate, relative CALL, RET/RET imm16; stack bounds and regression tests pass. Most x86 opcodes remain unsupported |
-| 5 | x86-64 interpreter and instruction tests | Limited MOV/ADD/branch, PUSH/POP including R8-R15, relative CALL, RET/RET imm16; checked stack access and regression tests pass. General ModRM/SIB and most x64 opcodes remain unsupported |
+| 4 | x86 instruction decoder and 32-bit execution subset | Limited MOV/ADD/branch, PUSH/POP register/immediate, relative and indirect CALL/JMP, RET/RET imm16; x86 absolute-IAT CALL and stack bounds are tested. Most x86 opcodes remain unsupported |
+| 5 | x86-64 interpreter and instruction tests | Limited MOV/ADD/branch, PUSH/POP including R8-R15, relative and indirect CALL/JMP, RET/RET imm16; x64 RIP-relative-IAT CALL and checked stack access are tested. General ModRM/SIB and most x64 opcodes remain unsupported |
 | 6 | PE32/PE32+ validation, mapping and relocations | Header/section validation; x86 HIGHLOW and x64 DIR64 base relocation; bounded import descriptor/thunk parsing and callback-driven IAT resolution. Built-in Windows DLL resolver is not implemented |
 | 7 | Win32 API compatibility layer | Four kernel32/kernelbase calls with synthetic import thunks; x86 stdcall stack args/cleanup and x64 RCX argument + return handling are tested. No general DLL export resolver or broad API coverage |
 | 8 | Guest process and thread model | PE ImageBase-aware guest memory/IP, move-based image ownership, architecture and x86/x64 range checks, primary-thread start, state/termination, 1024-thread cap; no scheduler/context switching |
@@ -30,7 +30,7 @@ The stages are intended to run sequentially without asking for approval at every
 - Guest-memory reads and writes reject out-of-range requests, preserve non-zero virtual bases, and reject address-range overflow.
 - The x86-64 prototype executes a synthetic MOV/ADD/HLT sequence and verifies RAX.
 - The x86 prototype executes a synthetic MOV/ADD/HLT sequence and verifies EAX.
-- x86/x64 CPU tests verify register/immediate stack operations, relative CALL/RET, RET imm16 stack cleanup, x64 R8/R9 access, and stack-boundary faults.
+- x86/x64 CPU tests verify register/immediate stack operations, relative and indirect CALL, RET/RET imm16 stack cleanup, x64 R8/R9 access, and stack-boundary faults. Dispatcher integration tests execute x86 absolute-IAT and x64 RIP-relative-IAT API calls through thunk return.
 - The PE parser recognizes synthetic PE32+ and PE32 headers, rejects an undersized optional header, and rejects mismatched machine/optional-header formats.
 - The PE mapper maps a synthetic .text section and rejects out-of-file raw data, overlapping raw and virtual sections, and a non-executable entry point.
 - PE32 HIGHLOW and PE32+ DIR64 relocation tests verify image-base delta application; malformed relocation blocks and rebasing without a relocation directory are rejected.
