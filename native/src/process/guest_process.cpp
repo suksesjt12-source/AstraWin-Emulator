@@ -1,6 +1,5 @@
 #include "astrawin/process/guest_process.h"
 
-#include <span>
 #include <utility>
 
 namespace astrawin::process {
@@ -15,7 +14,7 @@ GuestProcess::GuestProcess(
 
 std::optional<GuestProcess> GuestProcess::create(
     std::uint32_t process_id,
-    const pe::LoadedPeImage& image,
+    pe::LoadedPeImage image,
     std::string& error) {
     if (process_id == 0U) {
         error = "Process identifier must be non-zero";
@@ -29,13 +28,7 @@ std::optional<GuestProcess> GuestProcess::create(
         return std::nullopt;
     }
 
-    memory::GuestMemory memory(image.bytes.size());
-    const auto image_bytes = std::span<const std::uint8_t>(
-        image.bytes.data(), image.bytes.size());
-    if (!memory.write(0, image_bytes)) {
-        error = "Unable to copy loaded PE image into guest memory";
-        return std::nullopt;
-    }
+    memory::GuestMemory memory(std::move(image.bytes));
 
     std::vector<GuestThread> threads;
     threads.push_back(GuestThread{
