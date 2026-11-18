@@ -10,7 +10,9 @@ namespace astrawin::win32 {
 // One instance is intended per guest thread so last-error state is thread-local.
 class Environment {
 public:
-    explicit Environment(std::uint32_t process_id = 1U) noexcept;
+    explicit Environment(
+        std::uint32_t process_id = 1U,
+        std::uint32_t thread_id = 1U) noexcept;
 
     // Returns false for invalid arguments. The caller receives a Win32-style
     // last-error value and is responsible for guest ABI marshalling.
@@ -24,6 +26,7 @@ public:
 
 private:
     std::uint32_t process_id_;
+    std::uint32_t thread_id_;
     std::uint32_t last_error_{0};
 };
 

@@ -116,7 +116,10 @@ bool CallDispatcher::dispatch_x86(
         callee_cleanup = 4U; // WINAPI / stdcall callee cleanup on x86.
     } else if (api != ApiId::kGetLastError &&
                api != ApiId::kGetTickCount64 &&
-               api != ApiId::kGetCurrentProcessId) {
+               api != ApiId::kGetCurrentProcessId &&
+               api != ApiId::kGetCurrentThreadId &&
+               api != ApiId::kGetCurrentProcess &&
+               api != ApiId::kGetCurrentThread) {
         return false;
     }
 
@@ -166,7 +169,10 @@ bool CallDispatcher::dispatch_x64(
         argument_span = std::span<const std::uint64_t>(arguments.data(), 1U);
     } else if (api != ApiId::kGetLastError &&
                api != ApiId::kGetTickCount64 &&
-               api != ApiId::kGetCurrentProcessId) {
+               api != ApiId::kGetCurrentProcessId &&
+               api != ApiId::kGetCurrentThreadId &&
+               api != ApiId::kGetCurrentProcess &&
+               api != ApiId::kGetCurrentThread) {
         return false;
     }
 

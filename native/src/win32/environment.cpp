@@ -4,8 +4,10 @@
 
 namespace astrawin::win32 {
 
-Environment::Environment(std::uint32_t process_id) noexcept
-    : process_id_(process_id) {}
+Environment::Environment(
+    std::uint32_t process_id,
+    std::uint32_t thread_id) noexcept
+    : process_id_(process_id), thread_id_(thread_id) {}
 
 bool Environment::invoke(
     ApiId api,
@@ -47,6 +49,32 @@ bool Environment::invoke(
                 return false;
             }
             result = process_id_;
+            return true;
+
+        case ApiId::kGetCurrentThreadId:
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            result = thread_id_;
+            return true;
+
+        case ApiId::kGetCurrentProcess:
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            // Windows pseudo-handle: (HANDLE)-1; it is not a kernel object.
+            result = static_cast<std::uint64_t>(-1);
+            return true;
+
+        case ApiId::kGetCurrentThread:
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            // Windows pseudo-handle: (HANDLE)-2; it is not a kernel object.
+            result = static_cast<std::uint64_t>(-2);
             return true;
     }
 

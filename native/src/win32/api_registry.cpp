@@ -45,6 +45,15 @@ std::optional<ApiId> ApiRegistry::resolve(
     if (symbol == "GetCurrentProcessId") {
         return ApiId::kGetCurrentProcessId;
     }
+    if (symbol == "GetCurrentThreadId") {
+        return ApiId::kGetCurrentThreadId;
+    }
+    if (symbol == "GetCurrentProcess") {
+        return ApiId::kGetCurrentProcess;
+    }
+    if (symbol == "GetCurrentThread") {
+        return ApiId::kGetCurrentThread;
+    }
     return std::nullopt;
 }
 

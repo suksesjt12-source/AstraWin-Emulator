@@ -10,7 +10,10 @@ enum class ApiId {
     kGetLastError,
     kSetLastError,
     kGetTickCount64,
-    kGetCurrentProcessId
+    kGetCurrentProcessId,
+    kGetCurrentThreadId,
+    kGetCurrentProcess,
+    kGetCurrentThread
 };
 
 class ApiRegistry {
