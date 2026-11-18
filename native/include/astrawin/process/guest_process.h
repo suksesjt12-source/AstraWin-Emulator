@@ -35,7 +35,7 @@ public:
     static constexpr std::size_t kMaximumThreadCount = 1024U;
     [[nodiscard]] static std::optional<GuestProcess> create(
         std::uint32_t process_id,
-        const pe::LoadedPeImage& image,
+        pe::LoadedPeImage image,
         std::string& error);
 
     [[nodiscard]] std::optional<std::uint32_t> create_thread(
