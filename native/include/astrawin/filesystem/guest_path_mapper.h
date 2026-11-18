@@ -15,7 +15,7 @@ public:
     [[nodiscard]] bool resolve(
         std::string_view guest_path,
         std::filesystem::path& host_path,
-        std::string& error) const noexcept;
+        std::string& error) const;
 
 private:
     std::filesystem::path root_;
