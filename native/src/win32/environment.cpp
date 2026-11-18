@@ -34,9 +34,9 @@ bool Environment::invoke(
                 last_error_ = 87U;
                 return false;
             }
-            const auto elapsed = std::chrono::steady_clock::now() - start_time_;
-            result = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+            const auto ticks = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            result = ticks > 0 ? static_cast<std::uint64_t>(ticks) : 0U;
             return true;
         }
 
