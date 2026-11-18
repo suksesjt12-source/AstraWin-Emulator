@@ -6,15 +6,15 @@ AstraWin is an experimental Windows executable compatibility project for Android
 
 - Android Activity and JNI entry point.
 - Native C++20 core built for arm64-v8a.
-- Bounds-checked guest-memory buffer.
-- Small x86 and x86-64 interpreter subsets for smoke testing.
-- PE32/PE32+ header inspection and bounded section mapping; relocations and import resolution are not implemented.
-- A small Win32 API name registry and environment for four kernel32/kernelbase calls; no guest-call ABI bridge yet.
-- A basic guest process/thread lifecycle model; no scheduler, CPU context switching, or process isolation.
-- Windows drive path mapping into an Android sandbox with traversal and symlink-escape checks; no guest file I/O layer.
-- Host synchronization primitives for manual/auto-reset events and one-shot/periodic monotonic timers; they are not yet wired to Win32 wait APIs.
-- Backend-neutral graphics device contract and a headless frame-state backend; no Vulkan/OpenGL ES device or pixel renderer.
-- Host-native CMake tests and Android debug-APK CI workflow.
+- Bounds-checked guest-memory buffer with a move-initialization path.
+- Small x86 and x86-64 interpreter subsets for smoke testing; flags and instruction coverage are incomplete.
+- PE32/PE32+ header inspection and bounded section mapping. The mapper validates SizeOfHeaders, raw/virtual ranges, overlap, and executable entry-point placement. Relocations and import resolution are not implemented.
+- A small Win32 API name registry and environment for four kernel32/kernelbase calls. One environment instance is intended per guest thread so last-error state remains thread-local; guest ABI marshalling is not implemented. GetTickCount64 uses the host monotonic clock.
+- A basic guest process/thread lifecycle model with an image-memory move path and a thread-count cap. There is no scheduler, CPU context switching, or process isolation.
+- Windows drive-absolute path mapping into an Android sandbox with traversal, UNC, alternate-stream, relative-path, and symlink-escape checks. This is not a guest file I/O layer.
+- Host synchronization primitives for manual/auto-reset events and one-shot/periodic monotonic timers; they are not yet wired to Win32 wait APIs. Timer values are capped at one year.
+- Backend-neutral graphics device contract and headless frame-state backend; no Vulkan/OpenGL ES device or pixel renderer.
+- Host-native CMake tests and Android ARM64 debug-APK CI workflow. CI checks APK ABI packaging; its actual run status must be checked in GitHub Actions.
 
 ## Execution model planned
 
@@ -24,7 +24,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 4. A Win32 compatibility layer supplies the subset of operating-system services required by a target program.
 5. Graphics, audio, input, files, threads, and timing are provided through explicit host interfaces.
 
-A Windows game does not run merely because its PE header parses. It also depends on CPU instruction coverage, Windows APIs, graphics APIs, codecs, drivers, memory behavior, and game-specific services. Those components are future work and must be tested separately.
+A Windows game does not run merely because its PE header parses or its sections map. It also depends on CPU instruction coverage, Windows APIs, graphics APIs, codecs, drivers, memory behavior, and game-specific services. Those components must be completed and tested separately.
 
 ## Non-goals
 
