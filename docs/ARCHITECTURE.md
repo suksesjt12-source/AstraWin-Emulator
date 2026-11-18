@@ -7,9 +7,9 @@ AstraWin is an experimental Windows executable compatibility project for Android
 - Android Activity and JNI entry point.
 - Native C++20 core built for arm64-v8a.
 - Bounds-checked guest-memory buffer with a move-initialization path and PE ImageBase-aware guest virtual addressing; address-range overflow is rejected.
-- Small x86 and x86-64 interpreter subsets for smoke testing; flags and instruction coverage are incomplete.
+- Small x86 and x86-64 interpreter subsets supporting basic register moves/adds, short/near relative branches, register/immediate PUSH, register POP, relative CALL, RET and RET imm16. Stack reads/writes are bounds-checked through guest memory; flags, indirect calls, general ModRM/SIB decoding and most x86 instructions are not implemented.
 - PE32/PE32+ header inspection and bounded section mapping. The loader validates SizeOfHeaders, raw/virtual ranges, overlap, and executable entry-point placement; it applies x86 HIGHLOW and x64 DIR64 base relocations. Import descriptors and thunk/name/ordinal records are bounds-checked and enumerated. A caller-supplied callback can resolve symbols and populate the IAT; no built-in Windows DLL export resolver or broad Win32 API address map exists yet.
-- A small Win32 API name registry and environment for four kernel32/kernelbase calls. One environment instance is intended per guest thread so last-error state remains thread-local; guest ABI marshalling is not implemented. GetTickCount64 uses the host monotonic clock.
+- A limited Win32 API registry/environment for GetLastError, SetLastError, GetTickCount64 and GetCurrentProcessId. A per-process CallDispatcher creates synthetic import thunks and routes calls through x86 stdcall stack arguments or the Windows x64 first-argument RCX convention; x86 64-bit return values use EDX:EAX. One Environment instance is intended per guest thread so last-error state remains thread-local. The dispatcher covers only those four APIs and is not yet wired into a complete Android executable session manager.
 - A basic guest process/thread lifecycle model with an image-memory move path, ImageBase-aware entrypoints, architecture/range checks and a thread-count cap. There is no scheduler, CPU context switching, or process isolation.
 - Windows drive-absolute path mapping into an Android sandbox with traversal, UNC, alternate-stream, relative-path, and symlink-escape checks. This is not a guest file I/O layer.
 - Host synchronization primitives for manual/auto-reset events and one-shot/periodic monotonic timers; they are not yet wired to Win32 wait APIs. Timer values are capped at one year.
@@ -21,7 +21,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 1. Android UI selects a guest executable and inspects its PE header; full session management is not implemented.
 2. The PE loader validates and maps supported PE sections into guest memory.
 3. The CPU core interprets guest instructions, then later may add a tested ARM64 JIT.
-4. A Win32 compatibility layer supplies the subset of operating-system services required by a target program.
+4. The Win32 import resolver maps supported APIs to synthetic thunks; the call dispatcher marshals their guest ABI and resumes at the guest return address.
 5. Graphics, audio, input, files, threads, and timing are provided through explicit host interfaces.
 
 A Windows game does not run merely because its PE header parses or its sections map. It also depends on CPU instruction coverage, Windows APIs, graphics APIs, codecs, drivers, memory behavior, and game-specific services. Those components must be completed and tested separately.
