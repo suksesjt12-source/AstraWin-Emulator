@@ -14,6 +14,7 @@ struct LoadedSection {
     std::uint32_t virtual_address{0};
     std::uint32_t mapped_size{0};
     std::uint32_t raw_size{0};
+    std::uint32_t raw_pointer{0};
     std::uint32_t characteristics{0};
 };
 
