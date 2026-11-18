@@ -1,5 +1,6 @@
 #include "astrawin/process/guest_process.h"
 
+#include <new>
 #include <utility>
 
 namespace astrawin::process {
@@ -16,6 +17,7 @@ std::optional<GuestProcess> GuestProcess::create(
     std::uint32_t process_id,
     pe::LoadedPeImage image,
     std::string& error) {
+    try {
     if (process_id == 0U) {
         error = "Process identifier must be non-zero";
         return std::nullopt;
@@ -39,6 +41,10 @@ std::optional<GuestProcess> GuestProcess::create(
 
     error.clear();
     return GuestProcess(process_id, std::move(memory), std::move(threads));
+    } catch (const std::bad_alloc&) {
+        error = "Insufficient memory to create the guest process";
+        return std::nullopt;
+    }
 }
 
 std::optional<std::uint32_t> GuestProcess::create_thread(
@@ -61,12 +67,18 @@ std::optional<std::uint32_t> GuestProcess::create_thread(
         return std::nullopt;
     }
 
-    const auto id = next_thread_id_++;
-    threads_.push_back(GuestThread{
-        .id = id,
-        .instruction_pointer = entry_point,
-        .state = ThreadState::kReady
-    });
+    const auto id = next_thread_id_;
+    try {
+        threads_.push_back(GuestThread{
+            .id = id,
+            .instruction_pointer = entry_point,
+            .state = ThreadState::kReady
+        });
+    } catch (const std::bad_alloc&) {
+        error = "Insufficient memory to create the guest thread";
+        return std::nullopt;
+    }
+    ++next_thread_id_;
     error.clear();
     return id;
 }
