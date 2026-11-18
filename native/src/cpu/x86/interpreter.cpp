@@ -56,7 +56,7 @@ StepResult Interpreter::step(
         return StepResult::kRunning;
     }
 
-    if (opcode == 0xF4U || opcode == 0xC3U) {
+    if (opcode == 0xF4U) {
         state.halted = true;
         ++state.instructions_executed;
         return StepResult::kHalted;
