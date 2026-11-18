@@ -32,10 +32,11 @@ if(ANDROID)
     target_link_libraries(astrawin_native PRIVATE astrawin_core log)
     target_compile_options(astrawin_native PRIVATE -Wall -Wextra -Wpedantic)
 else()
+    find_package(Threads REQUIRED)
     enable_testing()
     add_executable(astrawin_native_tests
         ${ASTRAWIN_ROOT}/native/tests/native_tests.cpp
     )
-    target_link_libraries(astrawin_native_tests PRIVATE astrawin_core)
+    target_link_libraries(astrawin_native_tests PRIVATE astrawin_core Threads::Threads)
     add_test(NAME astrawin_native_tests COMMAND astrawin_native_tests)
 endif()
