@@ -10,10 +10,13 @@ namespace astrawin::memory {
 
 class GuestMemory {
 public:
-    explicit GuestMemory(std::size_t size);
-    explicit GuestMemory(std::vector<std::uint8_t> bytes);
+    explicit GuestMemory(std::size_t size, std::uint64_t base_address = 0U);
+    explicit GuestMemory(
+        std::vector<std::uint8_t> bytes,
+        std::uint64_t base_address = 0U);
 
     [[nodiscard]] std::size_t size() const noexcept;
+    [[nodiscard]] std::uint64_t base_address() const noexcept;
     [[nodiscard]] bool read(std::uint64_t address, std::span<std::uint8_t> output) const noexcept;
     [[nodiscard]] bool write(std::uint64_t address, std::span<const std::uint8_t> input) noexcept;
 
@@ -35,6 +38,7 @@ public:
 
 private:
     std::vector<std::uint8_t> bytes_;
+    std::uint64_t base_address_{0U};
 };
 
 }  // namespace astrawin::memory
