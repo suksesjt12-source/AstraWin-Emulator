@@ -5,22 +5,33 @@
 
 namespace astrawin::memory {
 
-GuestMemory::GuestMemory(std::size_t size) : bytes_(size, 0) {}
+GuestMemory::GuestMemory(std::size_t size, std::uint64_t base_address)
+    : bytes_(size, 0), base_address_(base_address) {}
 
-GuestMemory::GuestMemory(std::vector<std::uint8_t> bytes)
-    : bytes_(std::move(bytes)) {}
+GuestMemory::GuestMemory(
+    std::vector<std::uint8_t> bytes,
+    std::uint64_t base_address)
+    : bytes_(std::move(bytes)), base_address_(base_address) {}
 
 std::size_t GuestMemory::size() const noexcept {
     return bytes_.size();
 }
 
+std::uint64_t GuestMemory::base_address() const noexcept {
+    return base_address_;
+}
+
 bool GuestMemory::read(
     std::uint64_t address,
     std::span<std::uint8_t> output) const noexcept {
-    if (address > bytes_.size()) {
+    if (address < base_address_) {
         return false;
     }
-    const auto offset = static_cast<std::size_t>(address);
+    const auto relative_address = address - base_address_;
+    if (relative_address > bytes_.size()) {
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(relative_address);
     if (output.size() > bytes_.size() - offset) {
         return false;
     }
