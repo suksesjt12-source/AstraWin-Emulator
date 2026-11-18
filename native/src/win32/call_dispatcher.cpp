@@ -101,7 +101,9 @@ bool CallDispatcher::dispatch_x86(
     std::span<const std::uint64_t> argument_span{};
     std::uint32_t callee_cleanup = 0U;
     if (api == ApiId::kSetLastError ||
-        api == ApiId::kGetSystemTimeAsFileTime) {
+        api == ApiId::kGetSystemTimeAsFileTime ||
+        api == ApiId::kQueryPerformanceCounter ||
+        api == ApiId::kQueryPerformanceFrequency) {
         const auto argument_address =
             stack_pointer + kReturnAddressSize;
         if (argument_address >
@@ -122,7 +124,9 @@ bool CallDispatcher::dispatch_x86(
                api != ApiId::kGetCurrentThreadId &&
                api != ApiId::kGetCurrentProcess &&
                api != ApiId::kGetCurrentThread &&
-               api != ApiId::kGetSystemTimeAsFileTime) {
+               api != ApiId::kGetSystemTimeAsFileTime &&
+               api != ApiId::kQueryPerformanceCounter &&
+               api != ApiId::kQueryPerformanceFrequency) {
         return false;
     }
 
@@ -130,11 +134,14 @@ bool CallDispatcher::dispatch_x86(
     if (!environment.invoke(api, argument_span, result)) {
         return false;
     }
-    if (api == ApiId::kGetSystemTimeAsFileTime) {
+    if (api == ApiId::kGetSystemTimeAsFileTime ||
+        api == ApiId::kQueryPerformanceCounter ||
+        api == ApiId::kQueryPerformanceFrequency) {
         if (!memory.write_value(arguments[0], result)) {
             return false;
         }
-        result = 0U; // The Win32 function returns void; FILETIME is an output parameter.
+        // FILETIME is void-returning; QueryPerformance* return BOOL TRUE.
+        result = api == ApiId::kGetSystemTimeAsFileTime ? 0U : 1U;
     }
 
     const auto stack_increment =
@@ -173,7 +180,9 @@ bool CallDispatcher::dispatch_x64(
     std::array<std::uint64_t, 1> arguments{};
     std::span<const std::uint64_t> argument_span{};
     if (api == ApiId::kSetLastError ||
-        api == ApiId::kGetSystemTimeAsFileTime) {
+        api == ApiId::kGetSystemTimeAsFileTime ||
+        api == ApiId::kQueryPerformanceCounter ||
+        api == ApiId::kQueryPerformanceFrequency) {
         // Windows x64 passes the first integer or pointer argument in RCX.
         arguments[0] = api == ApiId::kSetLastError
             ? static_cast<std::uint32_t>(state.gpr[1])
@@ -186,7 +195,9 @@ bool CallDispatcher::dispatch_x64(
                api != ApiId::kGetCurrentThreadId &&
                api != ApiId::kGetCurrentProcess &&
                api != ApiId::kGetCurrentThread &&
-               api != ApiId::kGetSystemTimeAsFileTime) {
+               api != ApiId::kGetSystemTimeAsFileTime &&
+               api != ApiId::kQueryPerformanceCounter &&
+               api != ApiId::kQueryPerformanceFrequency) {
         return false;
     }
 
@@ -194,11 +205,14 @@ bool CallDispatcher::dispatch_x64(
     if (!environment.invoke(api, argument_span, result)) {
         return false;
     }
-    if (api == ApiId::kGetSystemTimeAsFileTime) {
+    if (api == ApiId::kGetSystemTimeAsFileTime ||
+        api == ApiId::kQueryPerformanceCounter ||
+        api == ApiId::kQueryPerformanceFrequency) {
         if (!memory.write_value(arguments[0], result)) {
             return false;
         }
-        result = 0U; // The Win32 function returns void; FILETIME is an output parameter.
+        // FILETIME is void-returning; QueryPerformance* return BOOL TRUE.
+        result = api == ApiId::kGetSystemTimeAsFileTime ? 0U : 1U;
     }
 
     state.rip = return_address;

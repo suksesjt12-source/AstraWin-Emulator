@@ -809,13 +809,21 @@ bool test_win32_api_environment() {
     const auto get_tick_count = ApiRegistry::resolve("kernel32.dll", "GetTickCount64");
     const auto get_tick_count32 = ApiRegistry::resolve("kernel32.dll", "GetTickCount");
     const auto get_filetime = ApiRegistry::resolve("kernel32.dll", "GetSystemTimeAsFileTime");
+    const auto get_precise_filetime = ApiRegistry::resolve(
+        "kernel32.dll", "GetSystemTimePreciseAsFileTime");
+    const auto query_counter = ApiRegistry::resolve(
+        "kernel32.dll", "QueryPerformanceCounter");
+    const auto query_frequency = ApiRegistry::resolve(
+        "kernel32.dll", "QueryPerformanceFrequency");
     const auto get_tid = ApiRegistry::resolve("kernel32.dll", "GetCurrentThreadId");
     const auto get_process = ApiRegistry::resolve("kernel32.dll", "GetCurrentProcess");
     const auto get_thread = ApiRegistry::resolve("kernel32.dll", "GetCurrentThread");
     const auto unknown = ApiRegistry::resolve("user32.dll", "MessageBoxW");
     if (!set_last_error || !get_last_error || !get_pid ||
         !get_tick_count || !get_tick_count32 || !get_filetime ||
-        !get_tid || !get_process || !get_thread || unknown) {
+        !get_precise_filetime || !query_counter || !query_frequency ||
+        !get_tid || !get_process || !get_thread || unknown ||
+        get_precise_filetime != get_filetime) {
         return false;
     }
 
@@ -852,6 +860,16 @@ bool test_win32_api_environment() {
         filetime <= 116444736000000000ULL) {
         return false;
     }
+    std::uint64_t qpc_value = 0U;
+    std::uint64_t qpf_value = 0U;
+    if (!environment.invoke(*query_counter,
+            std::span<const std::uint64_t>(&output_pointer, 1U), qpc_value) ||
+        qpc_value == 0U ||
+        !environment.invoke(*query_frequency,
+            std::span<const std::uint64_t>(&output_pointer, 1U), qpf_value) ||
+        qpf_value != 1000000000ULL) {
+        return false;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
     if (!environment.invoke(*get_tick_count, {}, result) ||
         result < first_tick_count) {
@@ -878,6 +896,8 @@ bool test_win32_call_dispatcher() {
     std::uint64_t get_ticks_thunk = 0U;
     std::uint64_t get_tick32_thunk = 0U;
     std::uint64_t get_filetime_thunk = 0U;
+    std::uint64_t qpc_thunk = 0U;
+    std::uint64_t qpf_thunk = 0U;
     std::uint64_t get_tid_thunk = 0U;
     std::uint64_t get_process_thunk = 0U;
     std::uint64_t get_thread_thunk = 0U;
@@ -898,6 +918,12 @@ bool test_win32_call_dispatcher() {
     ImportedSymbol get_filetime_import{};
     get_filetime_import.module = "kernel32.dll";
     get_filetime_import.name = "GetSystemTimeAsFileTime";
+    ImportedSymbol qpc_import{};
+    qpc_import.module = "kernel32.dll";
+    qpc_import.name = "QueryPerformanceCounter";
+    ImportedSymbol qpf_import{};
+    qpf_import.module = "kernel32.dll";
+    qpf_import.name = "QueryPerformanceFrequency";
     ImportedSymbol get_tid_import{};
     get_tid_import.module = "kernel32.dll";
     get_tid_import.name = "GetCurrentThreadId";
@@ -913,10 +939,12 @@ bool test_win32_call_dispatcher() {
         !x86_dispatcher.resolve_import(get_ticks_import, get_ticks_thunk, error) ||
         !x86_dispatcher.resolve_import(get_tick32_import, get_tick32_thunk, error) ||
         !x86_dispatcher.resolve_import(get_filetime_import, get_filetime_thunk, error) ||
+        !x86_dispatcher.resolve_import(qpc_import, qpc_thunk, error) ||
+        !x86_dispatcher.resolve_import(qpf_import, qpf_thunk, error) ||
         !x86_dispatcher.resolve_import(get_tid_import, get_tid_thunk, error) ||
         !x86_dispatcher.resolve_import(get_process_import, get_process_thunk, error) ||
         !x86_dispatcher.resolve_import(get_thread_import, get_thread_thunk, error) ||
-        x86_dispatcher.thunk_count() != 8U ||
+        x86_dispatcher.thunk_count() != 10U ||
         x86_dispatcher.find_thunk(get_pid_thunk) != ApiId::kGetCurrentProcessId ||
         x86_dispatcher.find_thunk(get_tid_thunk) != ApiId::kGetCurrentThreadId ||
         x86_dispatcher.find_thunk(get_process_thunk) != ApiId::kGetCurrentProcess ||
@@ -928,7 +956,7 @@ bool test_win32_call_dispatcher() {
     if (!x86_dispatcher.resolve_import(
             get_pid_import, duplicate_get_pid_thunk, error) ||
         duplicate_get_pid_thunk != get_pid_thunk ||
-        x86_dispatcher.thunk_count() != 8U) {
+        x86_dispatcher.thunk_count() != 10U) {
         return false;
     }
 
@@ -1044,6 +1072,28 @@ bool test_win32_call_dispatcher() {
         x86_filetime_value <= 116444736000000000ULL) {
         return false;
     }
+    const auto check_x86_performance_api = [&](std::uint64_t thunk,
+                                                std::uint64_t expected_value,
+                                                bool exact) {
+        x86_state.eip = static_cast<std::uint32_t>(thunk);
+        x86_state.gpr[4] = x86_filetime_stack;
+        if (!x86_memory.write_value(x86_filetime_stack, x86_return_address) ||
+            !x86_memory.write_value(x86_filetime_stack + 4U, x86_filetime_output) ||
+            x86_dispatcher.step_x86(x86_state, x86_memory, x86_environment) !=
+                astrawin::cpu::x86::StepResult::kRunning ||
+            x86_state.eip != x86_return_address ||
+            x86_state.gpr[4] != x86_filetime_stack + 8U ||
+            x86_state.gpr[0] != 1U) {
+            return false;
+        }
+        std::uint64_t value = 0U;
+        return x86_memory.read_value(x86_filetime_output, value) &&
+            (exact ? value == expected_value : value > 0U);
+    };
+    if (!check_x86_performance_api(qpc_thunk, 0U, false) ||
+        !check_x86_performance_api(qpf_thunk, 1000000000ULL, true)) {
+        return false;
+    }
 
     // Exercise the real x86 import-call sequence: CALL [absolute IAT slot],
     // thunk dispatch, return to caller, then execute the next instruction.
@@ -1080,6 +1130,8 @@ bool test_win32_call_dispatcher() {
     std::uint64_t x64_pid_thunk = 0U;
     std::uint64_t x64_tick32_thunk = 0U;
     std::uint64_t x64_filetime_thunk = 0U;
+    std::uint64_t x64_qpc_thunk = 0U;
+    std::uint64_t x64_qpf_thunk = 0U;
     std::uint64_t x64_tid_thunk = 0U;
     std::uint64_t x64_process_thunk = 0U;
     std::uint64_t x64_thread_thunk = 0U;
@@ -1092,12 +1144,16 @@ bool test_win32_call_dispatcher() {
         !x64_dispatcher.resolve_import(
             get_filetime_import, x64_filetime_thunk, error) ||
         !x64_dispatcher.resolve_import(
+            qpc_import, x64_qpc_thunk, error) ||
+        !x64_dispatcher.resolve_import(
+            qpf_import, x64_qpf_thunk, error) ||
+        !x64_dispatcher.resolve_import(
             get_tid_import, x64_tid_thunk, error) ||
         !x64_dispatcher.resolve_import(
             get_process_import, x64_process_thunk, error) ||
         !x64_dispatcher.resolve_import(
             get_thread_import, x64_thread_thunk, error) ||
-        x64_dispatcher.thunk_count() != 7U ||
+        x64_dispatcher.thunk_count() != 9U ||
         x64_dispatcher.find_thunk(x64_set_error_thunk) != ApiId::kSetLastError) {
         return false;
     }
@@ -1179,6 +1235,28 @@ bool test_win32_call_dispatcher() {
     std::uint64_t x64_filetime_value = 0U;
     if (!x64_memory.read_value(x64_filetime_output, x64_filetime_value) ||
         x64_filetime_value <= 116444736000000000ULL) {
+        return false;
+    }
+    const auto check_x64_performance_api = [&](std::uint64_t thunk,
+                                                std::uint64_t expected_value,
+                                                bool exact) {
+        x64_state.rip = thunk;
+        x64_state.gpr[4] = x64_memory_base + 192U;
+        x64_state.gpr[1] = x64_filetime_output; // RCX = 64-bit output pointer.
+        if (!x64_memory.write_value(x64_state.gpr[4], x64_return_address) ||
+            x64_dispatcher.step_x64(x64_state, x64_memory, x64_environment) !=
+                astrawin::cpu::x86_64::StepResult::kRunning ||
+            x64_state.rip != x64_return_address ||
+            x64_state.gpr[4] != x64_memory_base + 200U ||
+            x64_state.gpr[0] != 1U) {
+            return false;
+        }
+        std::uint64_t value = 0U;
+        return x64_memory.read_value(x64_filetime_output, value) &&
+            (exact ? value == expected_value : value > 0U);
+    };
+    if (!check_x64_performance_api(x64_qpc_thunk, 0U, false) ||
+        !check_x64_performance_api(x64_qpf_thunk, 1000000000ULL, true)) {
         return false;
     }
 

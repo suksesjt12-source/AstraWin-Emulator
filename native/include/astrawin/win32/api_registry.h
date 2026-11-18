@@ -12,6 +12,8 @@ enum class ApiId {
     kGetTickCount64,
     kGetTickCount,
     kGetSystemTimeAsFileTime,
+    kQueryPerformanceCounter,
+    kQueryPerformanceFrequency,
     kGetCurrentProcessId,
     kGetCurrentThreadId,
     kGetCurrentProcess,

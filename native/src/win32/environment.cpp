@@ -76,6 +76,26 @@ bool Environment::invoke(
             return true;
         }
 
+        case ApiId::kQueryPerformanceCounter: {
+            if (arguments.size() != 1U) {
+                last_error_ = 87U;
+                return false;
+            }
+            const auto counter = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            result = counter > 0 ? static_cast<std::uint64_t>(counter) : 0U;
+            return true;
+        }
+
+        case ApiId::kQueryPerformanceFrequency:
+            if (arguments.size() != 1U) {
+                last_error_ = 87U;
+                return false;
+            }
+            // The performance counter above is expressed in nanoseconds.
+            result = 1000000000ULL;
+            return true;
+
         case ApiId::kGetCurrentProcessId:
             if (!arguments.empty()) {
                 last_error_ = 87U;

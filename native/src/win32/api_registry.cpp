@@ -45,8 +45,15 @@ std::optional<ApiId> ApiRegistry::resolve(
     if (symbol == "GetTickCount") {
         return ApiId::kGetTickCount;
     }
-    if (symbol == "GetSystemTimeAsFileTime") {
+    if (symbol == "GetSystemTimeAsFileTime" ||
+        symbol == "GetSystemTimePreciseAsFileTime") {
         return ApiId::kGetSystemTimeAsFileTime;
+    }
+    if (symbol == "QueryPerformanceCounter") {
+        return ApiId::kQueryPerformanceCounter;
+    }
+    if (symbol == "QueryPerformanceFrequency") {
+        return ApiId::kQueryPerformanceFrequency;
     }
     if (symbol == "GetCurrentProcessId") {
         return ApiId::kGetCurrentProcessId;
