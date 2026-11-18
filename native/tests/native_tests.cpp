@@ -139,6 +139,210 @@ bool test_x86_interpreter() {
            !ret_state.halted;
 }
 
+
+bool test_x86_stack_and_call() {
+    using astrawin::cpu::x86::CpuState;
+    using astrawin::cpu::x86::Interpreter;
+    using astrawin::cpu::x86::StepResult;
+
+    constexpr std::uint32_t base = 0x1000U;
+    constexpr std::uint32_t stack_top = base + 128U;
+    astrawin::memory::GuestMemory memory(128U, base);
+    std::vector<std::uint8_t> code(128U, 0x90U);
+    code[0] = 0xE8U; // CALL rel32
+    code[1] = 0x0BU;
+    code[2] = 0U;
+    code[3] = 0U;
+    code[4] = 0U;
+    code[5] = 0xF4U; // caller resumes here and halts
+    code[16] = 0xB8U; // MOV EAX, 42
+    code[17] = 42U;
+    code[18] = 0U;
+    code[19] = 0U;
+    code[20] = 0U;
+    code[21] = 0xC3U; // RET
+    if (!memory.write(base, code)) {
+        return false;
+    }
+
+    CpuState state{};
+    state.eip = base;
+    state.gpr[4] = stack_top;
+    const auto result = Interpreter{}.run(state, memory, 8U);
+    if (result != StepResult::kHalted || state.gpr[0] != 42U ||
+        state.gpr[4] != stack_top || state.eip != base + 6U ||
+        state.instructions_executed != 4U) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory stack_memory(128U, base);
+    const std::vector<std::uint8_t> stack_program{
+        0x6AU, 0x80U,       // PUSH -128
+        0x58U,              // POP EAX
+        0x50U,              // PUSH EAX
+        0x5BU,              // POP EBX
+        0xF4U
+    };
+    if (!stack_memory.write(base, stack_program)) {
+        return false;
+    }
+    CpuState stack_state{};
+    stack_state.eip = base;
+    stack_state.gpr[4] = stack_top;
+    const auto stack_result = Interpreter{}.run(stack_state, stack_memory, 8U);
+    if (stack_result != StepResult::kHalted ||
+        stack_state.gpr[0] != 0xFFFFFF80U ||
+        stack_state.gpr[3] != 0xFFFFFF80U ||
+        stack_state.gpr[4] != stack_top) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory ret_adjust_memory(128U, base);
+    std::vector<std::uint8_t> ret_adjust_code(128U, 0x90U);
+    ret_adjust_code[0] = 0x68U; // PUSH 0x1234 as a caller argument
+    ret_adjust_code[1] = 0x34U;
+    ret_adjust_code[2] = 0x12U;
+    ret_adjust_code[3] = 0U;
+    ret_adjust_code[4] = 0U;
+    ret_adjust_code[5] = 0xE8U; // CALL function at offset 0x20
+    ret_adjust_code[6] = 0x16U;
+    ret_adjust_code[7] = 0U;
+    ret_adjust_code[8] = 0U;
+    ret_adjust_code[9] = 0U;
+    ret_adjust_code[10] = 0xF4U;
+    ret_adjust_code[32] = 0xC2U; // RET 4
+    ret_adjust_code[33] = 0x04U;
+    ret_adjust_code[34] = 0U;
+    if (!ret_adjust_memory.write(base, ret_adjust_code)) {
+        return false;
+    }
+    CpuState ret_adjust_state{};
+    ret_adjust_state.eip = base;
+    ret_adjust_state.gpr[4] = stack_top;
+    const auto ret_adjust_result =
+        Interpreter{}.run(ret_adjust_state, ret_adjust_memory, 8U);
+    if (ret_adjust_result != StepResult::kHalted ||
+        ret_adjust_state.gpr[4] != stack_top) {
+        return false;
+    }
+
+    CpuState push_fault{};
+    push_fault.eip = base;
+    push_fault.gpr[4] = base;
+    if (Interpreter{}.step(push_fault, stack_memory) != StepResult::kMemoryFault ||
+        push_fault.gpr[4] != base) {
+        return false;
+    }
+    CpuState pop_fault{};
+    pop_fault.eip = base + 2U; // POP EAX
+    pop_fault.gpr[4] = stack_top;
+    return Interpreter{}.step(pop_fault, stack_memory) == StepResult::kMemoryFault &&
+           pop_fault.gpr[4] == stack_top;
+}
+
+bool test_x64_stack_and_call() {
+    using astrawin::cpu::x86_64::CpuState;
+    using astrawin::cpu::x86_64::Interpreter;
+    using astrawin::cpu::x86_64::StepResult;
+
+    constexpr std::uint64_t base = 0x100000U;
+    constexpr std::uint64_t stack_top = base + 256U;
+    astrawin::memory::GuestMemory memory(256U, base);
+    std::vector<std::uint8_t> code(256U, 0x90U);
+    code[0] = 0xE8U; // CALL rel32
+    code[1] = 0x1BU;
+    code[2] = 0U;
+    code[3] = 0U;
+    code[4] = 0U;
+    code[5] = 0xF4U;
+    code[32] = 0x48U; // MOV RAX, 0x1122334455667788
+    code[33] = 0xB8U;
+    const std::uint64_t expected_rax = 0x1122334455667788ULL;
+    for (std::size_t index = 0; index < 8U; ++index) {
+        code[34U + index] = static_cast<std::uint8_t>(
+            (expected_rax >> (index * 8U)) & 0xFFU);
+    }
+    code[42] = 0xC3U;
+    if (!memory.write(base, code)) {
+        return false;
+    }
+
+    CpuState state{};
+    state.rip = base;
+    state.gpr[4] = stack_top;
+    const auto result = Interpreter{}.run(state, memory, 8U);
+    if (result != StepResult::kHalted || state.gpr[0] != expected_rax ||
+        state.gpr[4] != stack_top || state.rip != base + 6U ||
+        state.instructions_executed != 4U) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory stack_memory(256U, base);
+    const std::vector<std::uint8_t> stack_program{
+        0x41U, 0x50U,       // PUSH R8
+        0x41U, 0x59U,       // POP R9
+        0x6AU, 0x80U,       // PUSH sign-extended -128
+        0x58U,              // POP RAX
+        0xF4U
+    };
+    if (!stack_memory.write(base, stack_program)) {
+        return false;
+    }
+    CpuState stack_state{};
+    stack_state.rip = base;
+    stack_state.gpr[4] = stack_top;
+    stack_state.gpr[8] = 0x8877665544332211ULL;
+    const auto stack_result = Interpreter{}.run(stack_state, stack_memory, 10U);
+    if (stack_result != StepResult::kHalted ||
+        stack_state.gpr[9] != 0x8877665544332211ULL ||
+        stack_state.gpr[0] != 0xFFFFFFFFFFFFFF80ULL ||
+        stack_state.gpr[4] != stack_top) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory ret_adjust_memory(256U, base);
+    std::vector<std::uint8_t> ret_adjust_code(256U, 0x90U);
+    ret_adjust_code[0] = 0x68U; // PUSH 0x1234 as a caller argument
+    ret_adjust_code[1] = 0x34U;
+    ret_adjust_code[2] = 0x12U;
+    ret_adjust_code[3] = 0U;
+    ret_adjust_code[4] = 0U;
+    ret_adjust_code[5] = 0xE8U;
+    ret_adjust_code[6] = 0x16U;
+    ret_adjust_code[7] = 0U;
+    ret_adjust_code[8] = 0U;
+    ret_adjust_code[9] = 0U;
+    ret_adjust_code[10] = 0xF4U;
+    ret_adjust_code[32] = 0xC2U; // RET 4
+    ret_adjust_code[33] = 0x04U;
+    ret_adjust_code[34] = 0U;
+    if (!ret_adjust_memory.write(base, ret_adjust_code)) {
+        return false;
+    }
+    CpuState ret_adjust_state{};
+    ret_adjust_state.rip = base;
+    ret_adjust_state.gpr[4] = stack_top;
+    const auto ret_adjust_result =
+        Interpreter{}.run(ret_adjust_state, ret_adjust_memory, 8U);
+    if (ret_adjust_result != StepResult::kHalted ||
+        ret_adjust_state.gpr[4] != stack_top) {
+        return false;
+    }
+
+    CpuState push_fault{};
+    push_fault.rip = base;
+    push_fault.gpr[4] = base;
+    if (Interpreter{}.step(push_fault, stack_memory) != StepResult::kMemoryFault ||
+        push_fault.gpr[4] != base) {
+        return false;
+    }
+    CpuState pop_fault{};
+    pop_fault.rip = base + 2U; // POP R9 with REX.B
+    pop_fault.gpr[4] = stack_top;
+    return Interpreter{}.step(pop_fault, stack_memory) == StepResult::kMemoryFault &&
+           pop_fault.gpr[4] == stack_top;
+}
+
 bool test_pe32_plus_inspection() {
     std::vector<std::uint8_t> bytes(512, 0);
     const auto put16 = [&bytes](std::size_t offset, std::uint16_t value) {
