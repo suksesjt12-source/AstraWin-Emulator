@@ -54,9 +54,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "8.9"
+          cache-provider: basic
 
       - name: Build debug APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
 
       - name: Verify APK contains only the ARM64 native library
         shell: bash
@@ -64,7 +65,9 @@ jobs:
           APK="app/build/outputs/apk/debug/app-debug.apk"
           unzip -Z1 "$APK" > apk-files.txt
           grep -qx "lib/arm64-v8a/libastrawin_native.so" apk-files.txt
-          if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' apk-files.txt; then
+          if awk -F/ '$1 == "lib" && $2 != "arm64-v8a" { print; invalid = 1 } END { exit invalid }' apk-files.txt; then
+            echo "Verified: every packaged native library targets arm64-v8a"
+          else
             echo "Unexpected non-ARM64 native library found in APK"
             exit 1
           fi
