@@ -3,8 +3,7 @@
 namespace astrawin::win32 {
 
 Environment::Environment(std::uint32_t process_id) noexcept
-    : process_id_(process_id),
-      start_time_(std::chrono::steady_clock::now()) {}
+    : process_id_(process_id) {}
 
 bool Environment::invoke(
     ApiId api,
