@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <span>
 
@@ -8,6 +7,7 @@
 
 namespace astrawin::win32 {
 
+// One instance is intended per guest thread so last-error state is thread-local.
 class Environment {
 public:
     explicit Environment(std::uint32_t process_id = 1U) noexcept;
