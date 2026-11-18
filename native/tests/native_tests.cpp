@@ -51,9 +51,21 @@ bool test_x64_interpreter() {
 
     CpuState state{};
     const auto result = Interpreter{}.run(state, memory, 16);
-    return result == StepResult::kHalted &&
-           state.gpr[0] == 12U &&
-           state.instructions_executed == 3U;
+    if (result != StepResult::kHalted ||
+        state.gpr[0] != 12U ||
+        state.instructions_executed != 3U) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory ret_memory(4);
+    const std::uint8_t ret_opcode = 0xC3U;
+    if (!ret_memory.write_value(0, ret_opcode)) {
+        return false;
+    }
+    CpuState ret_state{};
+    return Interpreter{}.step(ret_state, ret_memory) ==
+               StepResult::kUnsupportedInstruction &&
+           !ret_state.halted;
 }
 
 
@@ -74,9 +86,21 @@ bool test_x86_interpreter() {
 
     CpuState state{};
     const auto result = Interpreter{}.run(state, memory, 16);
-    return result == StepResult::kHalted &&
-           state.gpr[0] == 7U &&
-           state.instructions_executed == 3U;
+    if (result != StepResult::kHalted ||
+        state.gpr[0] != 7U ||
+        state.instructions_executed != 3U) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory ret_memory(4);
+    const std::uint8_t ret_opcode = 0xC3U;
+    if (!ret_memory.write_value(0, ret_opcode)) {
+        return false;
+    }
+    CpuState ret_state{};
+    return Interpreter{}.step(ret_state, ret_memory) ==
+               StepResult::kUnsupportedInstruction &&
+           !ret_state.halted;
 }
 
 bool test_pe32_plus_inspection() {
@@ -111,7 +135,11 @@ bool test_pe32_plus_inspection() {
     astrawin::pe::PeImageInfo info{};
     std::string error;
     const bool parsed = astrawin::pe::PeParser::inspect(bytes, info, error);
-    return parsed &&
+    auto truncated_optional = bytes;
+    put16(pe + 20U, 31U);
+    const bool invalid_optional_rejected =
+        !astrawin::pe::PeParser::inspect(truncated_optional, info, error);
+    return parsed && invalid_optional_rejected &&
            info.architecture == astrawin::pe::PeArchitecture::kX64 &&
            info.is_64_bit &&
            info.section_count == 3U &&
@@ -181,12 +209,47 @@ bool test_pe_section_mapping() {
         loaded.bytes[0x1002U] == 0xF4U &&
         loaded.bytes[0x1004U] == 0U;
 
+    auto overlap_file = file;
+    overlap_file[pe + 6U] = 2U;
+    const auto second_section = section + 40U;
+    overlap_file[second_section] = '.';
+    overlap_file[second_section + 1U] = 'd';
+    overlap_file[second_section + 2U] = 'a';
+    overlap_file[second_section + 3U] = 't';
+    overlap_file[second_section + 4U] = 'a';
+    const auto put32_overlap = [&overlap_file](std::size_t offset, std::uint32_t value) {
+        for (std::size_t i = 0; i < 4U; ++i) {
+            overlap_file[offset + i] =
+                static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+        }
+    };
+    put32_overlap(second_section + 8U, 8U);
+    put32_overlap(second_section + 12U, 0x1008U);
+    put32_overlap(second_section + 36U, 0xC0000040U);
+    astrawin::pe::LoadedPeImage overlapping{};
+    std::string overlapping_error;
+    const bool overlap_rejected =
+        !astrawin::pe::PeImageLoader::load(
+            overlap_file, overlapping, overlapping_error);
+
+    auto non_executable_file = file;
+    non_executable_file[section + 36U] = 0x40U;
+    non_executable_file[section + 37U] = 0x00U;
+    non_executable_file[section + 38U] = 0x00U;
+    non_executable_file[section + 39U] = 0x40U;
+    astrawin::pe::LoadedPeImage non_executable{};
+    std::string non_executable_error;
+    const bool non_executable_rejected =
+        !astrawin::pe::PeImageLoader::load(
+            non_executable_file, non_executable, non_executable_error);
+
     put32(section + 20U, 0x210U);
     astrawin::pe::LoadedPeImage rejected{};
     std::string rejected_error;
     const bool malformed_rejected =
         !astrawin::pe::PeImageLoader::load(file, rejected, rejected_error);
-    return mapped && malformed_rejected;
+    return mapped && malformed_rejected &&
+           overlap_rejected && non_executable_rejected;
 }
 
 
@@ -231,6 +294,7 @@ bool test_guest_process_lifecycle() {
     image.info.architecture = astrawin::pe::PeArchitecture::kX64;
     image.info.is_64_bit = true;
     image.info.entry_point_rva = 0x1000U;
+    image.size_of_image = 0x2000U;
     image.bytes.resize(0x2000U, 0U);
     image.bytes[0x1000U] = 0xF4U;
 
@@ -337,7 +401,11 @@ bool test_guest_sync_primitives() {
     std::this_thread::sleep_for(std::chrono::milliseconds(3));
     const bool periodic_second = timer.consume_if_due();
     timer.cancel();
-    return one_shot && periodic_first && periodic_second && !timer.is_armed();
+    timer.arm(std::chrono::milliseconds::max());
+    const bool very_large_delay_is_safe = timer.is_armed();
+    timer.cancel();
+    return one_shot && periodic_first && periodic_second &&
+           very_large_delay_is_safe && !timer.is_armed();
 }
 
 
