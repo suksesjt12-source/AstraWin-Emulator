@@ -1,0 +1,64 @@
+#include "astrawin/win32/environment.h"
+
+namespace astrawin::win32 {
+
+Environment::Environment(std::uint32_t process_id) noexcept
+    : process_id_(process_id),
+      start_time_(std::chrono::steady_clock::now()) {}
+
+bool Environment::invoke(
+    ApiId api,
+    std::span<const std::uint64_t> arguments,
+    std::uint64_t& result) noexcept {
+    result = 0;
+
+    switch (api) {
+        case ApiId::kGetLastError:
+            if (!arguments.empty()) {
+                last_error_ = 87U; // ERROR_INVALID_PARAMETER
+                return false;
+            }
+            result = last_error_;
+            return true;
+
+        case ApiId::kSetLastError:
+            if (arguments.size() != 1U) {
+                last_error_ = 87U;
+                return false;
+            }
+            last_error_ = static_cast<std::uint32_t>(arguments[0]);
+            return true;
+
+        case ApiId::kGetTickCount64: {
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            const auto elapsed = std::chrono::steady_clock::now() - start_time_;
+            result = static_cast<std::uint64_t>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+            return true;
+        }
+
+        case ApiId::kGetCurrentProcessId:
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            result = process_id_;
+            return true;
+    }
+
+    last_error_ = 120U; // ERROR_CALL_NOT_IMPLEMENTED
+    return false;
+}
+
+std::uint32_t Environment::last_error() const noexcept {
+    return last_error_;
+}
+
+void Environment::set_last_error(std::uint32_t value) noexcept {
+    last_error_ = value;
+}
+
+}  // namespace astrawin::win32
