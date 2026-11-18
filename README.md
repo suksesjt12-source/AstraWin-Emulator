@@ -4,9 +4,15 @@ AstraWin is a from-scratch experimental Windows executable compatibility project
 
 ## Project status
 
-This repository contains an Android/JNI shell, native C++20 core, bounds-checked guest memory, small x86 and x86-64 interpreter prototypes, PE32/PE32+ header inspection, and a bounded PE section mapper. The loader does not yet apply base relocations or resolve imports. The supported CPU instruction subsets are intentionally tiny and are only smoke-test foundations. AstraWin cannot yet load or run ordinary Windows applications or games. The initial Win32 API registry/environment currently implements only GetLastError, SetLastError, GetTickCount64, and GetCurrentProcessId; guest ABI marshalling and broader Win32 coverage are not implemented. A basic guest process/thread lifecycle model and sandboxed Windows path mapper are included, but the scheduler, guest file I/O, process isolation, DirectX translation, Vulkan/OpenGL ES renderer, audio, and full input stack are not implemented. Event and timer primitives exist, but Windows wait APIs are not connected yet. A backend-neutral graphics device contract and a headless validation backend are included; no on-screen graphics renderer is implemented yet.
+This repository contains an Android/JNI shell, a native C++20 core, bounds-checked guest memory, small x86 and x86-64 interpreter prototypes, PE32/PE32+ header inspection, and a bounded PE section mapper. The PE mapper validates header size, rejects overlapping raw/virtual section ranges, and requires a non-zero entry point to fall inside an executable section. It does not apply base relocations or resolve imports.
 
-See the [architecture notes](docs/ARCHITECTURE.md) and [20-stage roadmap](docs/ROADMAP.md).
+The CPU interpreters support only tiny instruction subsets and are smoke-test foundations, not general x86 emulators. AstraWin cannot yet load and run ordinary Windows applications or games. The initial Win32 API registry/environment implements only GetLastError, SetLastError, GetTickCount64, and GetCurrentProcessId. The environment is intended to be instantiated once per guest thread; guest ABI marshalling and broader Win32 coverage are not implemented.
+
+A basic guest process/thread lifecycle model is present. PE image storage can be moved into guest memory to avoid an extra full-image copy, and guest thread creation is capped. A sandboxed Windows path mapper accepts explicit drive-absolute paths such as C:\Games\app.exe and rejects relative/drive-relative paths, traversal, UNC paths, alternate data streams, and symlink escapes. It is not a file I/O implementation.
+
+Manual/auto-reset event and one-shot/periodic timer primitives are included. Timer durations are clamped to one year to avoid monotonic-clock overflow. A backend-neutral graphics device contract and a headless validation backend are included; there is no on-screen Vulkan or OpenGL ES renderer yet.
+
+See the architecture notes (docs/ARCHITECTURE.md) and 20-stage roadmap (docs/ROADMAP.md).
 
 ## Build
 
@@ -26,8 +32,8 @@ Run the host-native tests:
     cmake --build build --parallel
     ctest --test-dir build --output-on-failure
 
-GitHub Actions runs the native tests first, then builds and uploads the Android debug APK as a workflow artifact.
+GitHub Actions runs native tests first, builds the Android debug APK, checks that the APK contains the ARM64 native library and no other native ABI, then uploads the APK as a workflow artifact. A successful build still does not prove Windows application compatibility.
 
 ## Important compatibility note
 
-Parsing a Windows PE header is not equivalent to loading an executable. Running Windows software requires substantial CPU instruction coverage and compatible operating-system, graphics, audio, filesystem, and driver interfaces. Compatibility will be reported only for programs that are actually tested.
+Parsing or mapping a Windows PE image is not equivalent to executing it. Running Windows software requires broad CPU instruction coverage and compatible operating-system, graphics, audio, filesystem, threading, and driver interfaces. Compatibility will be reported only for programs that are actually tested.
