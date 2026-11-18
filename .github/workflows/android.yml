@@ -55,6 +55,17 @@ jobs:
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
+      - name: Verify APK contains only the ARM64 native library
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          unzip -Z1 "$APK" > apk-files.txt
+          grep -qx "lib/arm64-v8a/libastrawin_native.so" apk-files.txt
+          if grep -Eq '^lib/(armeabi-v7a|x86|x86_64)/' apk-files.txt; then
+            echo "Unexpected non-ARM64 native library found in APK"
+            exit 1
+          fi
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
