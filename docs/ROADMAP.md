@@ -11,8 +11,8 @@ The stages are intended to run sequentially without asking for approval at every
 | 5 | x86-64 interpreter and instruction tests | Prototype implemented; instruction coverage very limited |
 | 6 | PE32/PE32+ validation, mapping and relocations | Header inspection and bounded section mapping prototype; relocations/imports not implemented |
 | 7 | Win32 API compatibility layer | Initial registry/environment for four kernel32 APIs; guest ABI bridge and broad coverage not implemented |
-| 8 | Guest process and thread model | Not started |
-| 9 | Windows filesystem path mapping | Not started |
+| 8 | Guest process and thread model | Basic process memory, thread creation/state and termination; no scheduler/context switching |
+| 9 | Windows filesystem path mapping | Drive path mapper to sandbox with traversal/UNC/ADS and symlink escape checks; file I/O not implemented |
 | 10 | Exceptions, events, timers and synchronization | Not started |
 | 11 | Host graphics abstraction | Not started |
 | 12 | Direct3D 9/11 compatibility planning and command translation | Not started |
@@ -32,4 +32,6 @@ The stages are intended to run sequentially without asking for approval at every
 - The x86 prototype executes a synthetic MOV/ADD/HLT sequence and verifies EAX.
 - The PE parser recognizes a synthetic PE32+ header and the PE mapper maps a synthetic `.text` section while rejecting out-of-file raw data.
 - The initial Win32 environment resolves and exercises GetLastError, SetLastError, GetTickCount64, and GetCurrentProcessId.
+- Guest process tests verify image memory, main/secondary thread lifecycle, and termination.
+- Guest path mapper tests verify drive mapping and reject traversal, alternate streams, and UNC paths.
 - GitHub Actions runs host-native tests before attempting the Android ARM64 debug APK build.
