@@ -22,6 +22,8 @@ std::optional<GuestProcess> GuestProcess::create(
         return std::nullopt;
     }
     if (image.bytes.empty() ||
+        image.bytes.size() > pe::PeImageLoader::kMaximumImageSize ||
+        image.size_of_image != image.bytes.size() ||
         image.info.entry_point_rva >= image.bytes.size()) {
         error = "Loaded image has no valid entry point";
         return std::nullopt;
@@ -55,6 +57,10 @@ std::optional<std::uint32_t> GuestProcess::create_thread(
     }
     if (entry_point >= memory_.size()) {
         error = "Thread entry point is outside guest memory";
+        return std::nullopt;
+    }
+    if (threads_.size() >= kMaximumThreadCount) {
+        error = "Guest process reached the maximum thread count";
         return std::nullopt;
     }
     if (next_thread_id_ == 0U) {
