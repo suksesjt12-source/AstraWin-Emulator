@@ -9,6 +9,8 @@ add_library(astrawin_core STATIC
     ${ASTRAWIN_ROOT}/native/src/cpu/x86/interpreter.cpp
     ${ASTRAWIN_ROOT}/native/src/pe/pe_parser.cpp
     ${ASTRAWIN_ROOT}/native/src/pe/pe_loader.cpp
+    ${ASTRAWIN_ROOT}/native/src/win32/api_registry.cpp
+    ${ASTRAWIN_ROOT}/native/src/win32/environment.cpp
 )
 
 target_include_directories(astrawin_core PUBLIC
