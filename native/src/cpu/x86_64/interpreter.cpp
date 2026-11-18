@@ -342,6 +342,32 @@ StepResult Interpreter::step(
         return StepResult::kRunning;
     }
 
+    if (opcode == 0x74U || opcode == 0x75U) {
+        std::uint8_t displacement = 0U;
+        if (!fetch_u8(memory, state.rip, displacement)) return StepResult::kMemoryFault;
+        const bool zero = (state.rflags & kZeroFlag) != 0U;
+        if ((opcode == 0x74U && zero) || (opcode == 0x75U && !zero)) {
+            std::uint64_t target = 0U;
+            if (!relative_target(state.rip, static_cast<std::int8_t>(displacement), target)) return StepResult::kMemoryFault;
+            state.rip = target;
+        }
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+    if (opcode == 0x0FU) {
+        std::uint8_t condition = 0U; std::uint32_t displacement = 0U;
+        if (!fetch_u8(memory, state.rip, condition) || (condition != 0x84U && condition != 0x85U) ||
+            !fetch_u32(memory, state.rip, displacement)) return StepResult::kUnsupportedInstruction;
+        const bool zero = (state.rflags & kZeroFlag) != 0U;
+        if ((condition == 0x84U && zero) || (condition == 0x85U && !zero)) {
+            std::uint64_t target = 0U;
+            if (!relative_target(state.rip, static_cast<std::int32_t>(displacement), target)) return StepResult::kMemoryFault;
+            state.rip = target;
+        }
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
     if (opcode == 0xEBU) {
         std::uint8_t displacement = 0;
         if (!fetch_u8(memory, state.rip, displacement)) {
