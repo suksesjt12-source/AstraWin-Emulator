@@ -25,7 +25,6 @@ public:
 private:
     std::uint32_t process_id_;
     std::uint32_t last_error_{0};
-    std::chrono::steady_clock::time_point start_time_;
 };
 
 }  // namespace astrawin::win32
