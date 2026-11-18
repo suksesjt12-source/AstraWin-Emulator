@@ -12,6 +12,7 @@ add_library(astrawin_core STATIC
     ${ASTRAWIN_ROOT}/native/src/win32/api_registry.cpp
     ${ASTRAWIN_ROOT}/native/src/win32/environment.cpp
     ${ASTRAWIN_ROOT}/native/src/process/guest_process.cpp
+    ${ASTRAWIN_ROOT}/native/src/filesystem/guest_path_mapper.cpp
 )
 
 target_include_directories(astrawin_core PUBLIC
