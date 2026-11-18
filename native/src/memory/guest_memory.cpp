@@ -1,17 +1,29 @@
 #include "astrawin/memory/guest_memory.h"
 
 #include <algorithm>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 
 namespace astrawin::memory {
 
 GuestMemory::GuestMemory(std::size_t size, std::uint64_t base_address)
-    : bytes_(size, 0), base_address_(base_address) {}
+    : bytes_(size, 0), base_address_(base_address) {
+    if (bytes_.size() >
+        std::numeric_limits<std::uint64_t>::max() - base_address_) {
+        throw std::length_error("Guest memory virtual range overflows");
+    }
+}
 
 GuestMemory::GuestMemory(
     std::vector<std::uint8_t> bytes,
     std::uint64_t base_address)
-    : bytes_(std::move(bytes)), base_address_(base_address) {}
+    : bytes_(std::move(bytes)), base_address_(base_address) {
+    if (bytes_.size() >
+        std::numeric_limits<std::uint64_t>::max() - base_address_) {
+        throw std::length_error("Guest memory virtual range overflows");
+    }
+}
 
 std::size_t GuestMemory::size() const noexcept {
     return bytes_.size();
