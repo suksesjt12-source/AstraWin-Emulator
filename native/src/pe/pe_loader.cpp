@@ -200,6 +200,7 @@ bool PeImageLoader::load(
         section.virtual_address = virtual_address;
         section.mapped_size = mapped_size;
         section.raw_size = raw_size;
+        section.raw_pointer = raw_pointer;
         section.characteristics = characteristics;
         sections.push_back(std::move(section));
     }
@@ -222,14 +223,8 @@ bool PeImageLoader::load(
             continue;
         }
 
-        std::uint32_t raw_pointer = 0;
-        const auto header = section_table + index * kSectionHeaderSize;
-        if (!read_le(file, header + 20U, raw_pointer)) {
-            error = "Section raw-data pointer is missing";
-            return false;
-        }
         std::copy_n(
-            file.begin() + static_cast<std::ptrdiff_t>(raw_pointer),
+            file.begin() + static_cast<std::ptrdiff_t>(section.raw_pointer),
             section.raw_size,
             candidate.bytes.begin() +
                 static_cast<std::ptrdiff_t>(section.virtual_address));
