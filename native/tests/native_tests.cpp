@@ -289,6 +289,32 @@ bool test_pe_section_mapping() {
         !astrawin::pe::PeImageLoader::load(
             overlap_file, overlapping, overlapping_error);
 
+    auto raw_overlap_file = file;
+    raw_overlap_file[pe + 6U] = 2U;
+    const auto raw_overlap_section = section + 40U;
+    raw_overlap_file[raw_overlap_section] = '.';
+    raw_overlap_file[raw_overlap_section + 1U] = 'd';
+    raw_overlap_file[raw_overlap_section + 2U] = 'a';
+    raw_overlap_file[raw_overlap_section + 3U] = 't';
+    raw_overlap_file[raw_overlap_section + 4U] = 'a';
+    const auto put32_raw_overlap = [&raw_overlap_file](
+        std::size_t offset, std::uint32_t value) {
+        for (std::size_t i = 0; i < 4U; ++i) {
+            raw_overlap_file[offset + i] =
+                static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+        }
+    };
+    put32_raw_overlap(raw_overlap_section + 8U, 4U);
+    put32_raw_overlap(raw_overlap_section + 12U, 0x1100U);
+    put32_raw_overlap(raw_overlap_section + 16U, 2U);
+    put32_raw_overlap(raw_overlap_section + 20U, 0x202U);
+    put32_raw_overlap(raw_overlap_section + 36U, 0x40000040U);
+    astrawin::pe::LoadedPeImage raw_overlapping{};
+    std::string raw_overlap_error;
+    const bool raw_overlap_rejected =
+        !astrawin::pe::PeImageLoader::load(
+            raw_overlap_file, raw_overlapping, raw_overlap_error);
+
     auto non_executable_file = file;
     non_executable_file[section + 36U] = 0x40U;
     non_executable_file[section + 37U] = 0x00U;
@@ -306,7 +332,8 @@ bool test_pe_section_mapping() {
     const bool malformed_rejected =
         !astrawin::pe::PeImageLoader::load(file, rejected, rejected_error);
     return mapped && malformed_rejected &&
-           overlap_rejected && non_executable_rejected;
+           overlap_rejected && raw_overlap_rejected &&
+           non_executable_rejected;
 }
 
 
@@ -423,7 +450,7 @@ bool test_guest_process_lifecycle() {
     if (process->state() != ProcessState::kExited ||
         process->exit_code() != 123U ||
         process->threads()[0].state != ThreadState::kExited ||
-        process->create_thread(0x1200U, error)) {
+        process->create_thread(0x00401200U, error)) {
         return false;
     }
     return true;
