@@ -1,5 +1,7 @@
 #include "astrawin/win32/environment.h"
 
+#include <chrono>
+
 namespace astrawin::win32 {
 
 Environment::Environment(std::uint32_t process_id) noexcept
