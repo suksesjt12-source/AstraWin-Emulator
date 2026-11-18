@@ -354,6 +354,235 @@ bool test_pe_section_mapping() {
 }
 
 
+
+bool test_pe_relocations_and_imports() {
+    constexpr std::size_t kPeOffset = 0x80U;
+    constexpr std::size_t kOptionalOffset = kPeOffset + 24U;
+    constexpr std::size_t kSectionTable = kOptionalOffset + 0xF0U;
+    constexpr std::uint64_t kPreferredBase64 = 0x0000000140000000ULL;
+    constexpr std::uint32_t kPreferredBase32 = 0x00400000U;
+
+    const auto put16 = [](std::vector<std::uint8_t>& bytes,
+                          std::size_t offset,
+                          std::uint16_t value) {
+        bytes[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+        bytes[offset + 1U] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    };
+    const auto put32 = [](std::vector<std::uint8_t>& bytes,
+                          std::size_t offset,
+                          std::uint32_t value) {
+        for (std::size_t index = 0; index < 4U; ++index) {
+            bytes[offset + index] =
+                static_cast<std::uint8_t>((value >> (index * 8U)) & 0xFFU);
+        }
+    };
+    const auto put64 = [](std::vector<std::uint8_t>& bytes,
+                          std::size_t offset,
+                          std::uint64_t value) {
+        for (std::size_t index = 0; index < 8U; ++index) {
+            bytes[offset + index] =
+                static_cast<std::uint8_t>((value >> (index * 8U)) & 0xFFU);
+        }
+    };
+    const auto get32 = [](const std::vector<std::uint8_t>& bytes,
+                          std::size_t offset) {
+        std::uint32_t value = 0;
+        for (std::size_t index = 0; index < 4U; ++index) {
+            value |= static_cast<std::uint32_t>(bytes[offset + index])
+                     << (index * 8U);
+        }
+        return value;
+    };
+    const auto get64 = [](const std::vector<std::uint8_t>& bytes,
+                          std::size_t offset) {
+        std::uint64_t value = 0;
+        for (std::size_t index = 0; index < 8U; ++index) {
+            value |= static_cast<std::uint64_t>(bytes[offset + index])
+                     << (index * 8U);
+        }
+        return value;
+    };
+
+    const auto make_pe = [&](bool is_64_bit,
+                             bool include_relocations,
+                             bool include_imports) {
+        std::vector<std::uint8_t> file(0x600U, 0U);
+        put16(file, 0U, 0x5A4DU);
+        put32(file, 0x3CU, static_cast<std::uint32_t>(kPeOffset));
+        put32(file, kPeOffset, 0x00004550U);
+        put16(file, kPeOffset + 4U, is_64_bit ? 0x8664U : 0x014CU);
+        put16(file, kPeOffset + 6U, 2U);
+        put16(file, kPeOffset + 20U, 0xF0U);
+        put16(file, kOptionalOffset, is_64_bit ? 0x020BU : 0x010BU);
+        put32(file, kOptionalOffset + 16U, 0x1000U);
+        const std::uint64_t preferred_base =
+            is_64_bit ? kPreferredBase64 : kPreferredBase32;
+        if (is_64_bit) {
+            put64(file, kOptionalOffset + 24U, preferred_base);
+            put32(file, kOptionalOffset + 108U, 16U);
+        } else {
+            put32(file, kOptionalOffset + 28U,
+                  static_cast<std::uint32_t>(preferred_base));
+            put32(file, kOptionalOffset + 92U, 16U);
+        }
+        put32(file, kOptionalOffset + 56U, 0x3000U);
+        put32(file, kOptionalOffset + 60U, 0x200U);
+
+        const auto directory_table = kOptionalOffset + (is_64_bit ? 112U : 96U);
+        if (include_imports) {
+            put32(file, directory_table + 8U, 0x2000U);
+            put32(file, directory_table + 12U, 40U);
+        }
+        if (include_relocations) {
+            put32(file, directory_table + 5U * 8U, 0x2100U);
+            put32(file, directory_table + 5U * 8U + 4U, 12U);
+        }
+
+        file[kSectionTable] = '.';
+        file[kSectionTable + 1U] = 't';
+        file[kSectionTable + 2U] = 'e';
+        file[kSectionTable + 3U] = 'x';
+        file[kSectionTable + 4U] = 't';
+        put32(file, kSectionTable + 8U, 0x200U);
+        put32(file, kSectionTable + 12U, 0x1000U);
+        put32(file, kSectionTable + 16U, 0x200U);
+        put32(file, kSectionTable + 20U, 0x200U);
+        put32(file, kSectionTable + 36U, 0x60000020U);
+
+        const auto data_section = kSectionTable + 40U;
+        file[data_section] = '.';
+        file[data_section + 1U] = 'd';
+        file[data_section + 2U] = 'a';
+        file[data_section + 3U] = 't';
+        file[data_section + 4U] = 'a';
+        put32(file, data_section + 8U, 0x200U);
+        put32(file, data_section + 12U, 0x2000U);
+        put32(file, data_section + 16U, 0x200U);
+        put32(file, data_section + 20U, 0x400U);
+        put32(file, data_section + 36U, 0xC0000040U);
+
+        if (is_64_bit) {
+            put64(file, 0x208U, kPreferredBase64 + 0x1234U);
+        } else {
+            put32(file, 0x208U, kPreferredBase32 + 0x1234U);
+        }
+
+        if (include_relocations) {
+            const std::size_t relocation_file_offset = 0x500U;
+            put32(file, relocation_file_offset, 0x1000U);
+            put32(file, relocation_file_offset + 4U, 12U);
+            put16(file, relocation_file_offset + 8U,
+                  is_64_bit ? 0xA008U : 0x3008U);
+            put16(file, relocation_file_offset + 10U, 0U);
+        }
+
+        if (include_imports) {
+            constexpr std::size_t data_raw = 0x400U;
+            put32(file, data_raw, 0x2050U);       // OriginalFirstThunk
+            put32(file, data_raw + 12U, 0x2040U); // Name
+            put32(file, data_raw + 16U, 0x2060U); // FirstThunk
+
+            const std::string module_name = "KERNEL32.dll";
+            std::copy(module_name.begin(), module_name.end(),
+                      file.begin() + static_cast<std::ptrdiff_t>(data_raw + 0x40U));
+            const std::string import_name = "ExitProcess";
+            std::copy(import_name.begin(), import_name.end(),
+                      file.begin() + static_cast<std::ptrdiff_t>(data_raw + 0x72U));
+            if (is_64_bit) {
+                put64(file, data_raw + 0x50U, 0x2070U);
+                put64(file, data_raw + 0x58U, 0U);
+            } else {
+                put32(file, data_raw + 0x50U, 0x2070U);
+                put32(file, data_raw + 0x54U, 0U);
+            }
+            put16(file, data_raw + 0x70U, 0U); // Hint
+        }
+        return file;
+    };
+
+    auto relocation64_file = make_pe(true, true, false);
+    astrawin::pe::PeLoadOptions relocation64_options{};
+    relocation64_options.load_base = kPreferredBase64 + 0x100000U;
+    astrawin::pe::LoadedPeImage relocated64{};
+    std::string relocation64_error;
+    const bool relocation64_ok = astrawin::pe::PeImageLoader::load(
+        relocation64_file, relocated64, relocation64_error, relocation64_options);
+    const bool relocation64_value_ok = relocation64_ok &&
+        relocated64.info.image_base == kPreferredBase64 + 0x100000U &&
+        relocated64.preferred_image_base == kPreferredBase64 &&
+        relocated64.relocations_applied &&
+        get64(relocated64.bytes, 0x1008U) ==
+            kPreferredBase64 + 0x100000U + 0x1234U;
+
+    auto relocation32_file = make_pe(false, true, false);
+    astrawin::pe::PeLoadOptions relocation32_options{};
+    relocation32_options.load_base =
+        static_cast<std::uint64_t>(kPreferredBase32) + 0x100000U;
+    astrawin::pe::LoadedPeImage relocated32{};
+    std::string relocation32_error;
+    const bool relocation32_ok = astrawin::pe::PeImageLoader::load(
+        relocation32_file, relocated32, relocation32_error, relocation32_options);
+    const bool relocation32_value_ok = relocation32_ok &&
+        relocated32.info.image_base ==
+            static_cast<std::uint64_t>(kPreferredBase32) + 0x100000U &&
+        relocated32.relocations_applied &&
+        get32(relocated32.bytes, 0x1008U) ==
+            kPreferredBase32 + 0x100000U + 0x1234U;
+
+    auto missing_relocation_file = make_pe(true, false, false);
+    astrawin::pe::LoadedPeImage missing_relocation_image{};
+    std::string missing_relocation_error;
+    const bool missing_relocation_rejected = !astrawin::pe::PeImageLoader::load(
+        missing_relocation_file, missing_relocation_image,
+        missing_relocation_error, relocation64_options);
+
+    auto malformed_relocation_file = make_pe(true, true, false);
+    put32(malformed_relocation_file, 0x504U, 7U);
+    astrawin::pe::LoadedPeImage malformed_relocation_image{};
+    std::string malformed_relocation_error;
+    const bool malformed_relocation_rejected = !astrawin::pe::PeImageLoader::load(
+        malformed_relocation_file, malformed_relocation_image,
+        malformed_relocation_error, relocation64_options);
+
+    auto import_file = make_pe(true, false, true);
+    astrawin::pe::LoadedPeImage unresolved_image{};
+    std::string unresolved_error;
+    const bool import_enumeration_ok = astrawin::pe::PeImageLoader::load(
+        import_file, unresolved_image, unresolved_error) &&
+        !unresolved_image.imports_resolved &&
+        unresolved_image.imports.size() == 1U &&
+        unresolved_image.imports[0].module == "KERNEL32.dll" &&
+        unresolved_image.imports[0].name == "ExitProcess" &&
+        !unresolved_image.imports[0].resolved;
+
+    astrawin::pe::PeLoadOptions import_options{};
+    import_options.import_resolver = [](
+        const astrawin::pe::ImportedSymbol& symbol,
+        std::uint64_t& address,
+        std::string& resolver_error) {
+        if (symbol.module != "KERNEL32.dll" ||
+            symbol.name != "ExitProcess" || symbol.by_ordinal) {
+            resolver_error = "Unexpected import symbol";
+            return false;
+        }
+        address = 0x0000000177771234ULL;
+        return true;
+    };
+    astrawin::pe::LoadedPeImage resolved_image{};
+    std::string resolved_error;
+    const bool import_resolution_ok = astrawin::pe::PeImageLoader::load(
+        import_file, resolved_image, resolved_error, import_options) &&
+        resolved_image.imports_resolved &&
+        resolved_image.imports.size() == 1U &&
+        resolved_image.imports[0].resolved &&
+        resolved_image.imports[0].resolved_address == 0x0000000177771234ULL &&
+        get64(resolved_image.bytes, 0x2060U) == 0x0000000177771234ULL;
+
+    return relocation64_value_ok && relocation32_value_ok &&
+           missing_relocation_rejected && malformed_relocation_rejected &&
+           import_enumeration_ok && import_resolution_ok;
+}
+
 bool test_win32_api_environment() {
     using astrawin::win32::ApiRegistry;
     using astrawin::win32::Environment;
