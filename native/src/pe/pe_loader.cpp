@@ -3,8 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
-#include <cstring>
+#include <cstdint>
 #include <utility>
+#include <vector>
 
 namespace astrawin::pe {
 namespace {
@@ -18,11 +19,24 @@ bool read_le(
         return false;
     }
 
-    value = 0;
+    std::uint64_t accumulator = 0;
     for (std::size_t index = 0; index < sizeof(T); ++index) {
-        value |= static_cast<T>(bytes[offset + index]) << (index * 8U);
+        accumulator |= static_cast<std::uint64_t>(bytes[offset + index])
+                       << (index * 8U);
     }
+    value = static_cast<T>(accumulator);
     return true;
+}
+
+struct SectionRange {
+    std::uint64_t begin;
+    std::uint64_t end;
+};
+
+bool overlaps(
+    const SectionRange& left,
+    const SectionRange& right) noexcept {
+    return left.begin < right.end && right.begin < left.end;
 }
 
 }  // namespace
@@ -50,10 +64,6 @@ bool PeImageLoader::load(
         error = "COFF header is truncated";
         return false;
     }
-    if (section_count > 96U) {
-        error = "Section count exceeds the loader safety limit";
-        return false;
-    }
 
     const auto optional = pe + 24U;
     std::uint32_t size_of_image = 0;
@@ -75,26 +85,34 @@ bool PeImageLoader::load(
         error = "Header size is outside the file or mapped image";
         return false;
     }
-    if (parsed_info.entry_point_rva >= size_of_image) {
+    if (parsed_info.entry_point_rva >= size_of_image &&
+        parsed_info.entry_point_rva != 0U) {
         error = "Entry point lies outside the mapped image";
         return false;
     }
 
     const std::size_t section_table = optional + optional_size;
     constexpr std::size_t kSectionHeaderSize = 40U;
-    const auto table_bytes = static_cast<std::size_t>(section_count) * kSectionHeaderSize;
+    const auto table_bytes =
+        static_cast<std::size_t>(section_count) * kSectionHeaderSize;
     if (section_table > file.size() ||
         table_bytes > file.size() - section_table) {
         error = "Section table is truncated";
         return false;
     }
+    const auto section_table_end = section_table + table_bytes;
+    if (section_table_end > size_of_headers) {
+        error = "SizeOfHeaders does not include the complete section table";
+        return false;
+    }
 
-    LoadedPeImage candidate{};
-    candidate.info = parsed_info;
-    candidate.size_of_image = size_of_image;
-    candidate.size_of_headers = size_of_headers;
-    candidate.bytes.assign(size_of_image, 0U);
-    std::copy_n(file.begin(), size_of_headers, candidate.bytes.begin());
+    std::vector<LoadedSection> sections;
+    std::vector<SectionRange> virtual_ranges;
+    std::vector<SectionRange> raw_ranges;
+    sections.reserve(section_count);
+    virtual_ranges.reserve(section_count);
+    raw_ranges.reserve(section_count);
+    bool entry_point_is_executable = parsed_info.entry_point_rva == 0U;
 
     for (std::size_t index = 0; index < section_count; ++index) {
         const auto header = section_table + index * kSectionHeaderSize;
@@ -117,10 +135,27 @@ bool PeImageLoader::load(
             return false;
         }
 
-        if (raw_pointer > file.size() ||
-            raw_size > file.size() - static_cast<std::size_t>(raw_pointer)) {
-            error = "Section raw data extends beyond the input file";
-            return false;
+        if (raw_size != 0U) {
+            if (raw_pointer < size_of_headers) {
+                error = "Section raw data overlaps the PE headers";
+                return false;
+            }
+            if (raw_pointer > file.size() ||
+                raw_size > file.size() - static_cast<std::size_t>(raw_pointer)) {
+                error = "Section raw data extends beyond the input file";
+                return false;
+            }
+            const SectionRange raw_range{
+                raw_pointer,
+                static_cast<std::uint64_t>(raw_pointer) + raw_size
+            };
+            for (const auto& existing : raw_ranges) {
+                if (overlaps(raw_range, existing)) {
+                    error = "Section raw-data ranges overlap";
+                    return false;
+                }
+            }
+            raw_ranges.push_back(raw_range);
         }
 
         const auto mapped_size = std::max(virtual_size, raw_size);
@@ -129,16 +164,31 @@ bool PeImageLoader::load(
             error = "Section virtual range extends beyond SizeOfImage";
             return false;
         }
-        if (mapped_size != 0U && virtual_address < size_of_headers) {
-            error = "Section virtual range overlaps the mapped headers";
-            return false;
-        }
 
-        if (raw_size != 0U) {
-            std::copy_n(
-                file.begin() + static_cast<std::ptrdiff_t>(raw_pointer),
-                raw_size,
-                candidate.bytes.begin() + static_cast<std::ptrdiff_t>(virtual_address));
+        if (mapped_size != 0U) {
+            if (virtual_address < size_of_headers) {
+                error = "Section virtual range overlaps the mapped headers";
+                return false;
+            }
+            const SectionRange virtual_range{
+                virtual_address,
+                static_cast<std::uint64_t>(virtual_address) + mapped_size
+            };
+            for (const auto& existing : virtual_ranges) {
+                if (overlaps(virtual_range, existing)) {
+                    error = "Section virtual-address ranges overlap";
+                    return false;
+                }
+            }
+            virtual_ranges.push_back(virtual_range);
+
+            constexpr std::uint32_t kImageScnMemExecute = 0x20000000U;
+            if ((characteristics & kImageScnMemExecute) != 0U &&
+                parsed_info.entry_point_rva >= virtual_address &&
+                parsed_info.entry_point_rva <
+                    static_cast<std::uint64_t>(virtual_address) + mapped_size) {
+                entry_point_is_executable = true;
+            }
         }
 
         LoadedSection section{};
@@ -147,9 +197,41 @@ bool PeImageLoader::load(
         section.mapped_size = mapped_size;
         section.raw_size = raw_size;
         section.characteristics = characteristics;
-        candidate.sections.push_back(std::move(section));
+        sections.push_back(std::move(section));
     }
 
+    if (!entry_point_is_executable) {
+        error = "Entry point is not inside an executable section";
+        return false;
+    }
+
+    LoadedPeImage candidate{};
+    candidate.info = parsed_info;
+    candidate.size_of_image = size_of_image;
+    candidate.size_of_headers = size_of_headers;
+    candidate.bytes.assign(size_of_image, 0U);
+    std::copy_n(file.begin(), size_of_headers, candidate.bytes.begin());
+
+    for (std::size_t index = 0; index < sections.size(); ++index) {
+        const auto& section = sections[index];
+        if (section.raw_size == 0U) {
+            continue;
+        }
+
+        std::uint32_t raw_pointer = 0;
+        const auto header = section_table + index * kSectionHeaderSize;
+        if (!read_le(file, header + 20U, raw_pointer)) {
+            error = "Section raw-data pointer is missing";
+            return false;
+        }
+        std::copy_n(
+            file.begin() + static_cast<std::ptrdiff_t>(raw_pointer),
+            section.raw_size,
+            candidate.bytes.begin() +
+                static_cast<std::ptrdiff_t>(section.virtual_address));
+    }
+
+    candidate.sections = std::move(sections);
     loaded = std::move(candidate);
     error.clear();
     return true;
