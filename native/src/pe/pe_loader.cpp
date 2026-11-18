@@ -68,10 +68,12 @@ bool PeImageLoader::load(
     const auto optional = pe + 24U;
     std::uint32_t size_of_image = 0;
     std::uint32_t size_of_headers = 0;
-    if (optional_size < 64U ||
+    const std::uint16_t minimum_optional_size =
+        parsed_info.is_64_bit ? 112U : 96U;
+    if (optional_size < minimum_optional_size ||
         !read_le(file, optional + 56U, size_of_image) ||
         !read_le(file, optional + 60U, size_of_headers)) {
-        error = "Optional header does not contain image-size fields";
+        error = "Optional header is too small for a supported PE image";
         return false;
     }
 
