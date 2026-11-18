@@ -6,10 +6,10 @@ The stages are intended to run sequentially without asking for approval at every
 |---:|---|---|
 | 1 | Repository structure, CMake and Android Gradle project | Implemented; CI validation pending |
 | 2 | ARM64 native runtime and Android JNI bridge | Implemented; CI validation pending |
-| 3 | Guest memory foundation and bounds checks | Implemented; host test added |
-| 4 | x86 instruction decoder and 32-bit execution subset | Not started |
+| 3 | Guest memory foundation and bounds checks | Implemented; bounds test added |
+| 4 | x86 instruction decoder and 32-bit execution subset | Prototype implemented; limited opcodes, smoke test added |
 | 5 | x86-64 interpreter and instruction tests | Prototype implemented; instruction coverage very limited |
-| 6 | PE32/PE32+ validation, mapping and relocations | Header inspection prototype only |
+| 6 | PE32/PE32+ validation, mapping and relocations | Header inspection prototype only; no mapping or relocations |
 | 7 | Win32 API compatibility layer | Not started |
 | 8 | Guest process and thread model | Not started |
 | 9 | Windows filesystem path mapping | Not started |
@@ -21,13 +21,14 @@ The stages are intended to run sequentially without asking for approval at every
 | 15 | Audio subsystem | Not started |
 | 16 | Keyboard, touch and controller input | Not started |
 | 17 | Android launcher, executable picker and session UI | Basic diagnostic screen implemented; picker not started |
-| 18 | APK packaging, runtime permissions and asset delivery | Debug build workflow added; validation pending |
-| 19 | Compatibility, stability and performance test suite | Native smoke tests added; end-to-end tests not started |
+| 18 | APK packaging, runtime permissions and asset delivery | ARM64 debug build workflow added; validation pending |
+| 19 | Compatibility, stability and performance test suite | Native smoke tests added; Windows app/game tests not started |
 | 20 | Final ARM64 APK release and verified compatibility report | Not started |
 
 ## Current acceptance tests
 
 - Guest-memory reads and writes reject out-of-range requests.
-- The x86-64 prototype executes a tiny synthetic MOV/ADD/HLT sequence and verifies RAX.
-- The PE parser recognizes a synthetic PE32+ header and rejects malformed input through explicit errors.
+- The x86-64 prototype executes a synthetic MOV/ADD/HLT sequence and verifies RAX.
+- The x86 prototype executes a synthetic MOV/ADD/HLT sequence and verifies EAX.
+- The PE parser recognizes a synthetic PE32+ header.
 - GitHub Actions runs host-native tests before attempting the Android ARM64 debug APK build.
