@@ -1,6 +1,7 @@
 #include "astrawin/pe/pe_loader.h"
 #include "astrawin/win32/api_registry.h"
 #include "astrawin/win32/environment.h"
+#include "astrawin/process/guest_process.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -214,11 +215,58 @@ bool test_win32_api_environment() {
     return environment.last_error() == 87U;
 }
 
+
+bool test_guest_process_lifecycle() {
+    using astrawin::process::GuestProcess;
+    using astrawin::process::ProcessState;
+    using astrawin::process::ThreadState;
+
+    astrawin::pe::LoadedPeImage image{};
+    image.info.architecture = astrawin::pe::PeArchitecture::kX64;
+    image.info.is_64_bit = true;
+    image.info.entry_point_rva = 0x1000U;
+    image.bytes.resize(0x2000U, 0U);
+    image.bytes[0x1000U] = 0xF4U;
+
+    std::string error;
+    auto process = GuestProcess::create(77U, image, error);
+    if (!process || process->process_id() != 77U ||
+        process->state() != ProcessState::kCreated ||
+        process->threads().size() != 1U ||
+        process->threads()[0].instruction_pointer != 0x1000U) {
+        return false;
+    }
+
+    std::uint8_t first_byte = 0;
+    if (!process->memory().read_value(0x1000U, first_byte) || first_byte != 0xF4U) {
+        return false;
+    }
+    const auto new_thread = process->create_thread(0x1100U, error);
+    if (!new_thread || *new_thread != 2U ||
+        !process->set_thread_state(*new_thread, ThreadState::kRunning)) {
+        return false;
+    }
+
+    process->start();
+    if (process->state() != ProcessState::kRunning) {
+        return false;
+    }
+    process->terminate(123U);
+    if (process->state() != ProcessState::kExited ||
+        process->exit_code() != 123U ||
+        process->threads()[0].state != ThreadState::kExited ||
+        process->create_thread(0x1200U, error)) {
+        return false;
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
     const bool pe_load_ok = test_pe_section_mapping();
     const bool win32_ok = test_win32_api_environment();
+    const bool process_ok = test_guest_process_lifecycle();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -231,5 +279,6 @@ int main() {
     std::cout << "PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok ? 0 : 1;
+    std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok ? 0 : 1;
 }
