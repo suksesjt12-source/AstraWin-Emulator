@@ -25,17 +25,31 @@ std::optional<GuestProcess> GuestProcess::create(
     if (image.bytes.empty() ||
         image.bytes.size() > pe::PeImageLoader::kMaximumImageSize ||
         image.size_of_image != image.bytes.size() ||
-        image.info.entry_point_rva >= image.bytes.size()) {
-        error = "Loaded image has no valid entry point";
+        image.info.entry_point_rva >= image.bytes.size() ||
+        image.info.is_64_bit !=
+            (image.info.architecture == pe::PeArchitecture::kX64)) {
+        error = "Loaded image metadata or entry point is invalid";
         return std::nullopt;
     }
 
-    memory::GuestMemory memory(std::move(image.bytes));
+    const auto image_size = static_cast<std::uint64_t>(image.bytes.size());
+    const auto image_base = image.info.image_base;
+    if (image_base > UINT64_MAX - image_size) {
+        error = "PE image virtual address range overflows";
+        return std::nullopt;
+    }
+    const auto image_end = image_base + image_size;
+    if (!image.info.is_64_bit && image_end > (1ULL << 32U)) {
+        error = "32-bit PE image exceeds the 32-bit guest address space";
+        return std::nullopt;
+    }
+
+    memory::GuestMemory memory(std::move(image.bytes), image_base);
 
     std::vector<GuestThread> threads;
     threads.push_back(GuestThread{
         .id = 1U,
-        .instruction_pointer = image.info.entry_point_rva,
+        .instruction_pointer = image_base + image.info.entry_point_rva,
         .state = ThreadState::kReady
     });
 
@@ -54,7 +68,9 @@ std::optional<std::uint32_t> GuestProcess::create_thread(
         error = "Cannot create a thread in an exited process";
         return std::nullopt;
     }
-    if (entry_point >= memory_.size()) {
+    const auto memory_base = memory_.base_address();
+    if (entry_point < memory_base ||
+        entry_point - memory_base >= memory_.size()) {
         error = "Thread entry point is outside guest memory";
         return std::nullopt;
     }
