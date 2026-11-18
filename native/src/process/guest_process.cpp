@@ -1,5 +1,6 @@
 #include "astrawin/process/guest_process.h"
 
+#include <limits>
 #include <new>
 #include <utility>
 
@@ -22,7 +23,9 @@ std::optional<GuestProcess> GuestProcess::create(
         error = "Process identifier must be non-zero";
         return std::nullopt;
     }
-    if (image.bytes.empty() ||
+    if ((image.info.architecture != pe::PeArchitecture::kX86 &&
+         image.info.architecture != pe::PeArchitecture::kX64) ||
+        image.bytes.empty() ||
         image.bytes.size() > pe::PeImageLoader::kMaximumImageSize ||
         image.size_of_image != image.bytes.size() ||
         image.info.entry_point_rva >= image.bytes.size() ||
@@ -34,7 +37,7 @@ std::optional<GuestProcess> GuestProcess::create(
 
     const auto image_size = static_cast<std::uint64_t>(image.bytes.size());
     const auto image_base = image.info.image_base;
-    if (image_base > UINT64_MAX - image_size) {
+    if (image_base > std::numeric_limits<std::uint64_t>::max() - image_size) {
         error = "PE image virtual address range overflows";
         return std::nullopt;
     }
