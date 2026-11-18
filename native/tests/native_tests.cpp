@@ -1,6 +1,7 @@
 #include "astrawin/pe/pe_loader.h"
 #include "astrawin/win32/api_registry.h"
 #include "astrawin/win32/environment.h"
+#include "astrawin/win32/call_dispatcher.h"
 #include "astrawin/process/guest_process.h"
 #include "astrawin/filesystem/guest_path_mapper.h"
 #include "astrawin/sync/guest_event.h"
@@ -840,6 +841,165 @@ bool test_win32_api_environment() {
     return environment.last_error() == 87U;
 }
 
+
+
+bool test_win32_call_dispatcher() {
+    using astrawin::win32::CallDispatcher;
+    using astrawin::win32::Environment;
+    using astrawin::win32::ApiId;
+    using astrawin::pe::ImportedSymbol;
+
+    CallDispatcher x86_dispatcher(false);
+    std::uint64_t get_pid_thunk = 0U;
+    std::uint64_t set_error_thunk = 0U;
+    std::uint64_t get_ticks_thunk = 0U;
+    std::string error;
+
+    ImportedSymbol get_pid_import{};
+    get_pid_import.module = "KERNEL32.dll";
+    get_pid_import.name = "GetCurrentProcessId";
+    ImportedSymbol set_error_import{};
+    set_error_import.module = "kernelbase.dll";
+    set_error_import.name = "SetLastError";
+    ImportedSymbol get_ticks_import{};
+    get_ticks_import.module = "kernel32.dll";
+    get_ticks_import.name = "GetTickCount64";
+
+    if (!x86_dispatcher.resolve_import(get_pid_import, get_pid_thunk, error) ||
+        !x86_dispatcher.resolve_import(set_error_import, set_error_thunk, error) ||
+        !x86_dispatcher.resolve_import(get_ticks_import, get_ticks_thunk, error) ||
+        x86_dispatcher.thunk_count() != 3U ||
+        x86_dispatcher.find_thunk(get_pid_thunk) != ApiId::kGetCurrentProcessId) {
+        return false;
+    }
+
+    std::uint64_t duplicate_get_pid_thunk = 0U;
+    if (!x86_dispatcher.resolve_import(
+            get_pid_import, duplicate_get_pid_thunk, error) ||
+        duplicate_get_pid_thunk != get_pid_thunk ||
+        x86_dispatcher.thunk_count() != 3U) {
+        return false;
+    }
+
+    ImportedSymbol unsupported_import{};
+    unsupported_import.module = "user32.dll";
+    unsupported_import.name = "MessageBoxW";
+    std::uint64_t unsupported_address = 0U;
+    if (x86_dispatcher.resolve_import(
+            unsupported_import, unsupported_address, error)) {
+        return false;
+    }
+
+    constexpr std::uint32_t x86_memory_base = 0x2000U;
+    astrawin::memory::GuestMemory x86_memory(256U, x86_memory_base);
+    Environment x86_environment(7654U);
+    constexpr std::uint32_t x86_return_address = 0x12345678U;
+
+    CpuState_unused_placeholder:
+    astrawin::cpu::x86::CpuState x86_state{};
+    x86_state.eip = static_cast<std::uint32_t>(get_pid_thunk);
+    x86_state.gpr[4] = x86_memory_base + 64U;
+    if (!x86_memory.write_value(x86_state.gpr[4], x86_return_address)) {
+        return false;
+    }
+    if (x86_dispatcher.step_x86(
+            x86_state, x86_memory, x86_environment) !=
+            astrawin::cpu::x86::StepResult::kRunning ||
+        x86_state.eip != x86_return_address ||
+        x86_state.gpr[4] != x86_memory_base + 68U ||
+        x86_state.gpr[0] != 7654U ||
+        x86_state.instructions_executed != 1U) {
+        return false;
+    }
+
+    constexpr std::uint32_t x86_set_error_stack = x86_memory_base + 96U;
+    constexpr std::uint32_t x86_set_error_return = 0x12345700U;
+    constexpr std::uint32_t expected_last_error = 0x5A5AU;
+    x86_state.eip = static_cast<std::uint32_t>(set_error_thunk);
+    x86_state.gpr[4] = x86_set_error_stack;
+    if (!x86_memory.write_value(x86_set_error_stack, x86_set_error_return) ||
+        !x86_memory.write_value(
+            x86_set_error_stack + 4U, expected_last_error)) {
+        return false;
+    }
+    if (x86_dispatcher.step_x86(
+            x86_state, x86_memory, x86_environment) !=
+            astrawin::cpu::x86::StepResult::kRunning ||
+        x86_state.eip != x86_set_error_return ||
+        x86_state.gpr[4] != x86_set_error_stack + 8U ||
+        x86_environment.last_error() != expected_last_error) {
+        return false;
+    }
+
+    constexpr std::uint32_t x86_ticks_stack = x86_memory_base + 128U;
+    x86_state.eip = static_cast<std::uint32_t>(get_ticks_thunk);
+    x86_state.gpr[4] = x86_ticks_stack;
+    if (!x86_memory.write_value(x86_ticks_stack, x86_return_address) ||
+        x86_dispatcher.step_x86(
+            x86_state, x86_memory, x86_environment) !=
+            astrawin::cpu::x86::StepResult::kRunning ||
+        x86_state.eip != x86_return_address ||
+        x86_state.gpr[4] != x86_ticks_stack + 4U) {
+        return false;
+    }
+    const auto x86_tick_count =
+        (static_cast<std::uint64_t>(x86_state.gpr[2]) << 32U) |
+        x86_state.gpr[0];
+    if (x86_tick_count == 0U) {
+        return false;
+    }
+
+    CallDispatcher x64_dispatcher(true);
+    std::uint64_t x64_set_error_thunk = 0U;
+    std::uint64_t x64_pid_thunk = 0U;
+    if (!x64_dispatcher.resolve_import(
+            set_error_import, x64_set_error_thunk, error) ||
+        !x64_dispatcher.resolve_import(
+            get_pid_import, x64_pid_thunk, error) ||
+        x64_dispatcher.thunk_count() != 2U ||
+        x64_dispatcher.find_thunk(x64_set_error_thunk) != ApiId::kSetLastError) {
+        return false;
+    }
+
+    constexpr std::uint64_t x64_memory_base = 0x3000U;
+    astrawin::memory::GuestMemory x64_memory(256U, x64_memory_base);
+    Environment x64_environment(9876U);
+    constexpr std::uint64_t x64_return_address = 0x0000000140001234ULL;
+    constexpr std::uint64_t x64_set_error_stack = x64_memory_base + 64U;
+    constexpr std::uint32_t x64_last_error = 0xABCD1234U;
+
+    astrawin::cpu::x86_64::CpuState x64_state{};
+    x64_state.rip = x64_set_error_thunk;
+    x64_state.gpr[4] = x64_set_error_stack;
+    x64_state.gpr[1] = x64_last_error; // RCX carries the first Windows x64 argument.
+    if (!x64_memory.write_value(x64_set_error_stack, x64_return_address) ||
+        x64_dispatcher.step_x64(
+            x64_state, x64_memory, x64_environment) !=
+            astrawin::cpu::x86_64::StepResult::kRunning ||
+        x64_state.rip != x64_return_address ||
+        x64_state.gpr[4] != x64_set_error_stack + 8U ||
+        x64_environment.last_error() != x64_last_error) {
+        return false;
+    }
+
+    constexpr std::uint64_t x64_pid_stack = x64_memory_base + 96U;
+    x64_state.rip = x64_pid_thunk;
+    x64_state.gpr[4] = x64_pid_stack;
+    if (!x64_memory.write_value(x64_pid_stack, x64_return_address) ||
+        x64_dispatcher.step_x64(
+            x64_state, x64_memory, x64_environment) !=
+            astrawin::cpu::x86_64::StepResult::kRunning ||
+        x64_state.rip != x64_return_address ||
+        x64_state.gpr[4] != x64_pid_stack + 8U ||
+        x64_state.gpr[0] != 9876U) {
+        return false;
+    }
+
+    return x86_dispatcher.step_x64(
+               *reinterpret_cast<astrawin::cpu::x86_64::CpuState*>(&x64_state),
+               x64_memory, x64_environment) ==
+           astrawin::cpu::x86_64::StepResult::kRunning;
+}
 
 bool test_guest_process_lifecycle() {
     using astrawin::process::GuestProcess;
