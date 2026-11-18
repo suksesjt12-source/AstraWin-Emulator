@@ -392,6 +392,12 @@ bool test_guest_path_mapper() {
     std::string unc_error;
     const bool unc_rejected = !mapper.resolve(
         "\\\\server\\share\\file.exe", rejected, unc_error);
+    std::string relative_error;
+    const bool relative_rejected = !mapper.resolve(
+        "relative\\app.exe", rejected, relative_error);
+    std::string drive_relative_error;
+    const bool drive_relative_rejected = !mapper.resolve(
+        "C:relative\\app.exe", rejected, drive_relative_error);
 
     ec.clear();
     fs::create_directory_symlink(outside, root / "drive_c" / "escape", ec);
@@ -407,6 +413,7 @@ bool test_guest_path_mapper() {
     fs::remove_all(outside, ec);
     return mapped && expected_path && traversal_rejected &&
            stream_rejected && unc_rejected &&
+           relative_rejected && drive_relative_rejected &&
            symlink_created && symlink_escape_rejected;
 }
 
