@@ -1076,11 +1076,15 @@ int main() {
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
+    const bool x86_stack_ok = test_x86_stack_and_call();
+    const bool x64_stack_ok = test_x64_stack_and_call();
     const bool pe_ok = test_pe32_plus_inspection();
 
     std::cout << "Guest memory: " << (memory_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "x86 stack/CALL/RET: " << (x86_stack_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "x64 stack/CALL/RET: " << (x64_stack_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE section mapping: " << (pe_load_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE relocations/imports: " << (pe_relocation_import_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE32/PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
@@ -1090,5 +1094,5 @@ int main() {
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Graphics device contract: " << (graphics_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
+    return memory_ok && cpu_ok && x86_ok && x86_stack_ok && x64_stack_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
 }
