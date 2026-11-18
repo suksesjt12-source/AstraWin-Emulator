@@ -28,11 +28,11 @@ class Interpreter {
 public:
     [[nodiscard]] StepResult step(
         CpuState& state,
-        const memory::GuestMemory& memory) const noexcept;
+        memory::GuestMemory& memory) const noexcept;
 
     [[nodiscard]] StepResult run(
         CpuState& state,
-        const memory::GuestMemory& memory,
+        memory::GuestMemory& memory,
         std::size_t max_steps) const noexcept;
 };
 
