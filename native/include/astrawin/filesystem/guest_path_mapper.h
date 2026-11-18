@@ -10,8 +10,8 @@ class GuestPathMapper {
 public:
     explicit GuestPathMapper(std::filesystem::path sandbox_root);
 
-    // Maps drive-qualified Windows paths to drive_c/ under the sandbox.
-    // Traversal, UNC paths, alternate data streams and symlink escapes are rejected.
+    // Maps drive-absolute Windows paths to drive_c/ under the sandbox.
+    // Relative, drive-relative, traversal, UNC, alternate-stream and symlink escapes are rejected.
     [[nodiscard]] bool resolve(
         std::string_view guest_path,
         std::filesystem::path& host_path,
