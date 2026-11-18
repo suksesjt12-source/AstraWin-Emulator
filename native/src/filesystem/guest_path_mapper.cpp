@@ -2,7 +2,7 @@
 
 #include <cctype>
 #include <system_error>
-#include <vector>
+#include <utility>
 
 namespace astrawin::filesystem {
 namespace {
@@ -32,7 +32,7 @@ GuestPathMapper::GuestPathMapper(std::filesystem::path sandbox_root)
 bool GuestPathMapper::resolve(
     std::string_view guest_path,
     std::filesystem::path& host_path,
-    std::string& error) const noexcept {
+    std::string& error) const {
     if (guest_path.empty() || guest_path.size() > 32767U) {
         error = "Guest path is empty or exceeds the supported length";
         return false;
