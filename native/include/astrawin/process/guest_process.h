@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -31,6 +32,7 @@ struct GuestThread {
 
 class GuestProcess {
 public:
+    static constexpr std::size_t kMaximumThreadCount = 1024U;
     [[nodiscard]] static std::optional<GuestProcess> create(
         std::uint32_t process_id,
         const pe::LoadedPeImage& image,
