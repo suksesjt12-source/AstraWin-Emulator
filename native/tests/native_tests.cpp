@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "astrawin/cpu/x86_64/interpreter.h"
@@ -31,7 +32,17 @@ bool test_guest_memory() {
     }
 
     std::uint64_t out_of_range = 0;
-    return !memory.read_value(12, out_of_range);
+    if (memory.read_value(12, out_of_range)) {
+        return false;
+    }
+
+    std::vector<std::uint8_t> image_bytes{0x90U, 0xF4U, 0xCCU};
+    astrawin::memory::GuestMemory moved_memory(std::move(image_bytes));
+    std::uint8_t first = 0;
+    std::uint8_t last = 0;
+    return moved_memory.size() == 3U &&
+           moved_memory.read_value(0U, first) && first == 0x90U &&
+           moved_memory.read_value(2U, last) && last == 0xCCU;
 }
 
 bool test_x64_interpreter() {
