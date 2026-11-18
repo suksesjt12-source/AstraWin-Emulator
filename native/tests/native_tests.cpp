@@ -6,6 +6,7 @@
 #include "astrawin/sync/guest_event.h"
 #include "astrawin/sync/guest_timer.h"
 #include "astrawin/graphics/headless_device.h"
+#include <algorithm>
 #include <thread>
 #include <filesystem>
 #include <cstdint>
@@ -854,6 +855,7 @@ bool test_graphics_device_contract() {
 
 int main() {
     const bool pe_load_ok = test_pe_section_mapping();
+    const bool pe_relocation_import_ok = test_pe_relocations_and_imports();
     const bool win32_ok = test_win32_api_environment();
     const bool process_ok = test_guest_process_lifecycle();
     const bool path_ok = test_guest_path_mapper();
@@ -868,6 +870,7 @@ int main() {
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE section mapping: " << (pe_load_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "PE relocations/imports: " << (pe_relocation_import_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE32/PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
@@ -875,5 +878,5 @@ int main() {
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Graphics device contract: " << (graphics_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
 }
