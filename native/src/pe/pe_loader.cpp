@@ -200,6 +200,7 @@ bool apply_relocations(
     }
 
     std::size_t cursor = directory.rva;
+    std::size_t applied_relocation_count = 0U;
     const auto end = static_cast<std::size_t>(directory_end);
     while (cursor < end) {
         if (end - cursor < 8U) {
@@ -257,6 +258,7 @@ bool apply_relocations(
                     error = "PE32+ relocation value is invalid or overflows";
                     return false;
                 }
+                ++applied_relocation_count;
             } else {
                 if (type != 3U) { // IMAGE_REL_BASED_HIGHLOW
                     error = "Unsupported relocation type for PE32 image";
@@ -272,12 +274,17 @@ bool apply_relocations(
                     error = "PE32 relocation value is invalid or overflows";
                     return false;
                 }
+                ++applied_relocation_count;
             }
         }
         cursor += block_size;
     }
 
-    image.relocations_applied = true;
+    if (image_moved && applied_relocation_count == 0U) {
+        error = "Base-relocation directory contains no fixups for a relocated image";
+        return false;
+    }
+    image.relocations_applied = image_moved;
     return true;
 }
 
