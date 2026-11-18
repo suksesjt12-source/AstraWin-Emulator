@@ -895,7 +895,6 @@ bool test_win32_call_dispatcher() {
     Environment x86_environment(7654U);
     constexpr std::uint32_t x86_return_address = 0x12345678U;
 
-    CpuState_unused_placeholder:
     astrawin::cpu::x86::CpuState x86_state{};
     x86_state.eip = static_cast<std::uint32_t>(get_pid_thunk);
     x86_state.gpr[4] = x86_memory_base + 64U;
@@ -995,10 +994,10 @@ bool test_win32_call_dispatcher() {
         return false;
     }
 
+    astrawin::cpu::x86_64::CpuState wrong_mode_state{};
     return x86_dispatcher.step_x64(
-               *reinterpret_cast<astrawin::cpu::x86_64::CpuState*>(&x64_state),
-               x64_memory, x64_environment) ==
-           astrawin::cpu::x86_64::StepResult::kRunning;
+               wrong_mode_state, x64_memory, x64_environment) ==
+           astrawin::cpu::x86_64::StepResult::kUnsupportedInstruction;
 }
 
 bool test_guest_process_lifecycle() {
@@ -1231,6 +1230,7 @@ int main() {
     const bool pe_load_ok = test_pe_section_mapping();
     const bool pe_relocation_import_ok = test_pe_relocations_and_imports();
     const bool win32_ok = test_win32_api_environment();
+    const bool win32_dispatch_ok = test_win32_call_dispatcher();
     const bool process_ok = test_guest_process_lifecycle();
     const bool path_ok = test_guest_path_mapper();
     const bool sync_ok = test_guest_sync_primitives();
@@ -1252,9 +1252,10 @@ int main() {
     std::cout << "PE32/PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "Win32 API call dispatcher: " << (win32_dispatch_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Graphics device contract: " << (graphics_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && x86_stack_ok && x64_stack_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
+    return memory_ok && cpu_ok && x86_ok && x86_stack_ok && x64_stack_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && win32_dispatch_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
 }
