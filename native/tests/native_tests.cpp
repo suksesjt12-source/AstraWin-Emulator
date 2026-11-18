@@ -175,7 +175,28 @@ bool test_pe32_plus_inspection() {
     truncated_optional[pe + 21U] = 0U;
     const bool invalid_optional_rejected =
         !astrawin::pe::PeParser::inspect(truncated_optional, info, error);
-    return parsed && invalid_optional_rejected &&
+
+    auto pe32 = bytes;
+    put16(pe32, pe + 4U, 0x014CU);
+    put16(pe32, optional, 0x010BU);
+    put32(pe32, optional + 28U, 0x00400000U);
+    astrawin::pe::PeImageInfo pe32_info{};
+    std::string pe32_error;
+    const bool pe32_parsed =
+        astrawin::pe::PeParser::inspect(pe32, pe32_info, pe32_error) &&
+        pe32_info.architecture == astrawin::pe::PeArchitecture::kX86 &&
+        !pe32_info.is_64_bit &&
+        pe32_info.image_base == 0x00400000U;
+
+    auto mismatched_format = bytes;
+    put16(mismatched_format, pe + 4U, 0x014CU);
+    std::string mismatch_error;
+    const bool mismatched_format_rejected =
+        !astrawin::pe::PeParser::inspect(
+            mismatched_format, pe32_info, mismatch_error);
+
+    return parsed && invalid_optional_rejected && pe32_parsed &&
+           mismatched_format_rejected &&
            info.architecture == astrawin::pe::PeArchitecture::kX64 &&
            info.is_64_bit &&
            info.section_count == 3U &&
