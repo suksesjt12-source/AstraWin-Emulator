@@ -23,6 +23,7 @@ target_include_directories(astrawin_core PUBLIC
 )
 
 target_compile_features(astrawin_core PUBLIC cxx_std_20)
+target_compile_options(astrawin_core PRIVATE -Wall -Wextra -Wpedantic)
 set_target_properties(astrawin_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if(ANDROID)
