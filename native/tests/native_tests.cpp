@@ -136,7 +136,8 @@ bool test_pe32_plus_inspection() {
     std::string error;
     const bool parsed = astrawin::pe::PeParser::inspect(bytes, info, error);
     auto truncated_optional = bytes;
-    put16(pe + 20U, 31U);
+    truncated_optional[pe + 20U] = 31U;
+    truncated_optional[pe + 21U] = 0U;
     const bool invalid_optional_rejected =
         !astrawin::pe::PeParser::inspect(truncated_optional, info, error);
     return parsed && invalid_optional_rejected &&
