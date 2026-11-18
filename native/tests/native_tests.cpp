@@ -3,6 +3,9 @@
 #include "astrawin/win32/environment.h"
 #include "astrawin/process/guest_process.h"
 #include "astrawin/filesystem/guest_path_mapper.h"
+#include "astrawin/sync/guest_event.h"
+#include "astrawin/sync/guest_timer.h"
+#include <thread>
 #include <filesystem>
 #include <cstdint>
 #include <iostream>
@@ -298,6 +301,44 @@ bool test_guest_path_mapper() {
            stream_rejected && unc_rejected;
 }
 
+
+bool test_guest_sync_primitives() {
+    using astrawin::sync::GuestEvent;
+    using astrawin::sync::GuestTimer;
+
+    GuestEvent manual_event(true, true);
+    if (!manual_event.wait_for(std::chrono::milliseconds(1)) ||
+        !manual_event.wait_for(std::chrono::milliseconds(1))) {
+        return false;
+    }
+    manual_event.reset();
+    if (manual_event.wait_for(std::chrono::milliseconds(1))) {
+        return false;
+    }
+
+    GuestEvent auto_event(false, true);
+    if (!auto_event.wait_for(std::chrono::milliseconds(1)) ||
+        auto_event.wait_for(std::chrono::milliseconds(1))) {
+        return false;
+    }
+    auto_event.set();
+    if (!auto_event.wait_for(std::chrono::milliseconds(1))) {
+        return false;
+    }
+
+    GuestTimer timer;
+    timer.arm(std::chrono::milliseconds::zero());
+    const bool one_shot = timer.is_armed() && timer.consume_if_due() &&
+                          !timer.is_armed();
+    timer.arm(std::chrono::milliseconds::zero(),
+              std::chrono::milliseconds(2));
+    const bool periodic_first = timer.consume_if_due();
+    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+    const bool periodic_second = timer.consume_if_due();
+    timer.cancel();
+    return one_shot && periodic_first && periodic_second && !timer.is_armed();
+}
+
 }  // namespace
 
 int main() {
@@ -305,6 +346,7 @@ int main() {
     const bool win32_ok = test_win32_api_environment();
     const bool process_ok = test_guest_process_lifecycle();
     const bool path_ok = test_guest_path_mapper();
+    const bool sync_ok = test_guest_sync_primitives();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -319,5 +361,6 @@ int main() {
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok ? 0 : 1;
+    std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok && sync_ok ? 0 : 1;
 }
