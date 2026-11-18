@@ -7,7 +7,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 - Android Activity and JNI entry point.
 - Native C++20 core built for arm64-v8a.
 - Bounds-checked guest-memory buffer.
-- Small x86-64 interpreter subset for smoke testing.
+- Small x86 and x86-64 interpreter subsets for smoke testing.
 - PE32/PE32+ header inspection only.
 - Host-native CMake tests and Android debug-APK CI workflow.
 
