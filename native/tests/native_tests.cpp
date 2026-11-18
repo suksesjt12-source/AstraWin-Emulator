@@ -119,7 +119,7 @@ int main() {
 
     std::cout << "Guest memory: " << (memory_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
-    std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\\n';
+    std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
     return memory_ok && cpu_ok && x86_ok && pe_ok ? 0 : 1;
