@@ -518,6 +518,9 @@ bool test_guest_path_mapper() {
     std::string drive_relative_error;
     const bool drive_relative_rejected = !mapper.resolve(
         "C:relative\\app.exe", rejected, drive_relative_error);
+    std::string drive_only_error;
+    const bool drive_only_rejected = !mapper.resolve(
+        "C:", rejected, drive_only_error);
 
     ec.clear();
     fs::create_directory_symlink(outside, root / "drive_c" / "escape", ec);
@@ -534,6 +537,7 @@ bool test_guest_path_mapper() {
     return mapped && expected_path && traversal_rejected &&
            stream_rejected && unc_rejected &&
            relative_rejected && drive_relative_rejected &&
+           drive_only_rejected &&
            symlink_created && symlink_escape_rejected;
 }
 
