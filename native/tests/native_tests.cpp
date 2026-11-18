@@ -2,6 +2,8 @@
 #include "astrawin/win32/api_registry.h"
 #include "astrawin/win32/environment.h"
 #include "astrawin/process/guest_process.h"
+#include "astrawin/filesystem/guest_path_mapper.h"
+#include <filesystem>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -261,12 +263,48 @@ bool test_guest_process_lifecycle() {
     return true;
 }
 
+
+bool test_guest_path_mapper() {
+    namespace fs = std::filesystem;
+    const auto root = fs::temp_directory_path() / "astrawin_path_mapper_test";
+    std::error_code ec;
+    fs::create_directories(root, ec);
+    if (ec) {
+        return false;
+    }
+
+    astrawin::filesystem::GuestPathMapper mapper(root);
+    fs::path resolved;
+    std::string error;
+    const bool mapped = mapper.resolve(
+        "C:\\Program Files\\Demo\\app.exe", resolved, error);
+    const auto expected = fs::weakly_canonical(
+        root / "drive_c" / "Program Files" / "Demo" / "app.exe", ec);
+    const bool expected_path = !ec && resolved == expected;
+
+    fs::path rejected;
+    std::string traversal_error;
+    const bool traversal_rejected = !mapper.resolve(
+        "C:\\..\\outside.exe", rejected, traversal_error);
+    std::string stream_error;
+    const bool stream_rejected = !mapper.resolve(
+        "C:\\file.exe:secret", rejected, stream_error);
+    std::string unc_error;
+    const bool unc_rejected = !mapper.resolve(
+        "\\\\server\\share\\file.exe", rejected, unc_error);
+
+    fs::remove_all(root, ec);
+    return mapped && expected_path && traversal_rejected &&
+           stream_rejected && unc_rejected;
+}
+
 }  // namespace
 
 int main() {
     const bool pe_load_ok = test_pe_section_mapping();
     const bool win32_ok = test_win32_api_environment();
     const bool process_ok = test_guest_process_lifecycle();
+    const bool path_ok = test_guest_path_mapper();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -280,5 +318,6 @@ int main() {
 
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok ? 0 : 1;
+    std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok ? 0 : 1;
 }
