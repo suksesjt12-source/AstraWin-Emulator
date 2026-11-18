@@ -6,7 +6,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 
 - Android Activity and JNI entry point.
 - Native C++20 core built for arm64-v8a.
-- Bounds-checked guest-memory buffer with a move-initialization path.
+- Bounds-checked guest-memory buffer with a move-initialization path and PE ImageBase-aware guest virtual addressing; address-range overflow is rejected.
 - Small x86 and x86-64 interpreter subsets for smoke testing; flags and instruction coverage are incomplete.
 - PE32/PE32+ header inspection and bounded section mapping. The mapper validates SizeOfHeaders, raw/virtual ranges, overlap, and executable entry-point placement. Relocations and import resolution are not implemented.
 - A small Win32 API name registry and environment for four kernel32/kernelbase calls. One environment instance is intended per guest thread so last-error state remains thread-local; guest ABI marshalling is not implemented. GetTickCount64 uses the host monotonic clock.
