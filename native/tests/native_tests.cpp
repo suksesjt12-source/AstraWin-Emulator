@@ -1058,6 +1058,27 @@ bool test_win32_call_dispatcher() {
            x64_iat_state.rip == x64_iat_base + 7U;
 }
 
+bool test_conditional_branches() {
+    constexpr std::uint64_t base = 0x1000U;
+    {
+        astrawin::memory::GuestMemory memory(64U, base);
+        const std::vector<std::uint8_t> code{0x74U,0x02U,0xF4U,0x90U,0xF4U};
+        if (!memory.write(base, code)) return false;
+        astrawin::cpu::x86::CpuState state{}; state.eip = base; state.eflags |= 1U << 6U;
+        astrawin::cpu::x86::Interpreter cpu;
+        if (cpu.run(state,memory,8U) != astrawin::cpu::x86::StepResult::kHalted || state.eip != base + 5U) return false;
+    }
+    {
+        astrawin::memory::GuestMemory memory(64U, base);
+        const std::vector<std::uint8_t> code{0x0FU,0x85U,0x01U,0U,0U,0U,0xF4U,0xF4U};
+        if (!memory.write(base, code)) return false;
+        astrawin::cpu::x86_64::CpuState state{}; state.rip = base; state.rflags &= ~(1ULL << 6U);
+        astrawin::cpu::x86_64::Interpreter cpu;
+        if (cpu.run(state,memory,8U) != astrawin::cpu::x86_64::StepResult::kHalted || state.rip != base + 8U) return false;
+    }
+    return true;
+}
+
 bool test_guest_process_lifecycle() {
     using astrawin::process::GuestProcess;
     using astrawin::process::ProcessState;
@@ -1299,6 +1320,7 @@ int main() {
     const bool x86_stack_ok = test_x86_stack_and_call();
     const bool x64_stack_ok = test_x64_stack_and_call();
     const bool pe_ok = test_pe32_plus_inspection();
+    const bool conditional_branches_ok = test_conditional_branches();
 
     std::cout << "Guest memory: " << (memory_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
@@ -1315,5 +1337,5 @@ int main() {
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Graphics device contract: " << (graphics_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && x86_stack_ok && x64_stack_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && win32_dispatch_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
+    return conditional_branches_ok && memory_ok && cpu_ok && x86_ok && x86_stack_ok && x64_stack_ok && pe_ok && pe_load_ok && pe_relocation_import_ok && win32_ok && win32_dispatch_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
 }
