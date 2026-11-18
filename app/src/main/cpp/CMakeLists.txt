@@ -11,6 +11,7 @@ add_library(astrawin_core STATIC
     ${ASTRAWIN_ROOT}/native/src/pe/pe_loader.cpp
     ${ASTRAWIN_ROOT}/native/src/win32/api_registry.cpp
     ${ASTRAWIN_ROOT}/native/src/win32/environment.cpp
+    ${ASTRAWIN_ROOT}/native/src/process/guest_process.cpp
 )
 
 target_include_directories(astrawin_core PUBLIC
