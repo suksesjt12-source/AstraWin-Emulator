@@ -14,7 +14,7 @@ The stages are intended to run sequentially without asking for approval at every
 | 8 | Guest process and thread model | Basic process memory, thread creation/state and termination; no scheduler/context switching |
 | 9 | Windows filesystem path mapping | Drive path mapper to sandbox with traversal/UNC/ADS and symlink escape checks; file I/O not implemented |
 | 10 | Exceptions, events, timers and synchronization | Manual/auto-reset event and one-shot/periodic timer primitives added; exceptions and Win32 wait integration remain |
-| 11 | Host graphics abstraction | Not started |
+| 11 | Host graphics abstraction | Backend-neutral GraphicsDevice API and headless frame-state validation backend; no pixel renderer |
 | 12 | Direct3D 9/11 compatibility planning and command translation | Not started |
 | 13 | Vulkan renderer backend | Not started |
 | 14 | OpenGL ES fallback renderer | Not started |
@@ -35,4 +35,5 @@ The stages are intended to run sequentially without asking for approval at every
 - Guest process tests verify image memory, main/secondary thread lifecycle, and termination.
 - Guest path mapper tests verify drive mapping and reject traversal, alternate streams, and UNC paths.
 - Guest sync tests verify manual/auto-reset events and one-shot/periodic timer behavior.
+- Graphics tests verify device initialization, frame lifecycle, resize rules and clear-color bounds using the headless backend.
 - GitHub Actions runs host-native tests before attempting the Android ARM64 debug APK build.
