@@ -1,3 +1,4 @@
+#include "astrawin/pe/pe_loader.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -109,9 +110,80 @@ bool test_pe32_plus_inspection() {
            info.image_base == 0x0000000140000000ULL;
 }
 
+bool test_pe_section_mapping() {
+    std::vector<std::uint8_t> file(0x204U, 0U);
+    const auto put16 = [&file](std::size_t offset, std::uint16_t value) {
+        file[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+        file[offset + 1U] = static_cast<std::uint8_t>((value >> 8U) & 0xFFU);
+    };
+    const auto put32 = [&file](std::size_t offset, std::uint32_t value) {
+        for (std::size_t i = 0; i < 4U; ++i) {
+            file[offset + i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+        }
+    };
+    const auto put64 = [&file](std::size_t offset, std::uint64_t value) {
+        for (std::size_t i = 0; i < 8U; ++i) {
+            file[offset + i] = static_cast<std::uint8_t>((value >> (i * 8U)) & 0xFFU);
+        }
+    };
+
+    constexpr std::size_t pe = 0x80U;
+    constexpr std::size_t optional = pe + 24U;
+    constexpr std::size_t section = optional + 0xF0U;
+    put16(0, 0x5A4DU);
+    put32(0x3CU, static_cast<std::uint32_t>(pe));
+    put32(pe, 0x00004550U);
+    put16(pe + 4U, 0x8664U);
+    put16(pe + 6U, 1U);
+    put16(pe + 20U, 0xF0U);
+    put16(optional, 0x020BU);
+    put32(optional + 16U, 0x1000U);
+    put64(optional + 24U, 0x0000000140000000ULL);
+    put32(optional + 56U, 0x2000U);
+    put32(optional + 60U, 0x200U);
+
+    file[section] = '.';
+    file[section + 1U] = 't';
+    file[section + 2U] = 'e';
+    file[section + 3U] = 'x';
+    file[section + 4U] = 't';
+    put32(section + 8U, 16U);
+    put32(section + 12U, 0x1000U);
+    put32(section + 16U, 4U);
+    put32(section + 20U, 0x200U);
+    put32(section + 36U, 0x60000020U);
+    file[0x200U] = 0x90U;
+    file[0x201U] = 0x90U;
+    file[0x202U] = 0xF4U;
+    file[0x203U] = 0xCCU;
+
+    astrawin::pe::LoadedPeImage loaded{};
+    std::string error;
+    if (!astrawin::pe::PeImageLoader::load(file, loaded, error)) {
+        return false;
+    }
+    const bool mapped =
+        loaded.bytes.size() == 0x2000U &&
+        loaded.sections.size() == 1U &&
+        loaded.sections[0].name == ".text" &&
+        loaded.sections[0].virtual_address == 0x1000U &&
+        loaded.sections[0].mapped_size == 16U &&
+        loaded.bytes[0x1000U] == 0x90U &&
+        loaded.bytes[0x1002U] == 0xF4U &&
+        loaded.bytes[0x1004U] == 0U;
+
+    put32(section + 20U, 0x210U);
+    astrawin::pe::LoadedPeImage rejected{};
+    std::string rejected_error;
+    const bool malformed_rejected =
+        !astrawin::pe::PeImageLoader::load(file, rejected, rejected_error);
+    return mapped && malformed_rejected;
+}
+
 }  // namespace
 
 int main() {
+    const bool pe_load_ok = test_pe_section_mapping();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -120,7 +192,8 @@ int main() {
     std::cout << "Guest memory: " << (memory_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "PE section mapping: " << (pe_load_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
-    return memory_ok && cpu_ok && x86_ok && pe_ok ? 0 : 1;
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok ? 0 : 1;
 }
