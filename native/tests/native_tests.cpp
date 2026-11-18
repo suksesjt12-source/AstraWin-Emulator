@@ -99,8 +99,9 @@ bool test_x64_interpreter() {
         return false;
     }
     CpuState ret_state{};
+    ret_state.gpr[4] = 4U; // Empty stack points just past the guest memory.
     return Interpreter{}.step(ret_state, ret_memory) ==
-               StepResult::kUnsupportedInstruction &&
+               StepResult::kMemoryFault &&
            !ret_state.halted;
 }
 
@@ -134,8 +135,9 @@ bool test_x86_interpreter() {
         return false;
     }
     CpuState ret_state{};
+    ret_state.gpr[4] = 4U; // Empty stack points just past the guest memory.
     return Interpreter{}.step(ret_state, ret_memory) ==
-               StepResult::kUnsupportedInstruction &&
+               StepResult::kMemoryFault &&
            !ret_state.halted;
 }
 
@@ -210,8 +212,8 @@ bool test_x86_stack_and_call() {
     ret_adjust_code[8] = 0U;
     ret_adjust_code[9] = 0U;
     ret_adjust_code[10] = 0xF4U;
-    ret_adjust_code[32] = 0xC2U; // RET 4
-    ret_adjust_code[33] = 0x04U;
+    ret_adjust_code[32] = 0xC2U; // RET 8 (one 64-bit stack argument)
+    ret_adjust_code[33] = 0x08U;
     ret_adjust_code[34] = 0U;
     if (!ret_adjust_memory.write(base, ret_adjust_code)) {
         return false;
