@@ -9,7 +9,7 @@ The stages are intended to run sequentially without asking for approval at every
 | 3 | Guest memory foundation and bounds checks | Implemented; bounds test added |
 | 4 | x86 instruction decoder and 32-bit execution subset | Prototype implemented; limited opcodes, smoke test added |
 | 5 | x86-64 interpreter and instruction tests | Prototype implemented; instruction coverage very limited |
-| 6 | PE32/PE32+ validation, mapping and relocations | Header inspection prototype only; no mapping or relocations |
+| 6 | PE32/PE32+ validation, mapping and relocations | Header inspection and bounded section mapping prototype; relocations/imports not implemented |
 | 7 | Win32 API compatibility layer | Not started |
 | 8 | Guest process and thread model | Not started |
 | 9 | Windows filesystem path mapping | Not started |
@@ -30,5 +30,5 @@ The stages are intended to run sequentially without asking for approval at every
 - Guest-memory reads and writes reject out-of-range requests.
 - The x86-64 prototype executes a synthetic MOV/ADD/HLT sequence and verifies RAX.
 - The x86 prototype executes a synthetic MOV/ADD/HLT sequence and verifies EAX.
-- The PE parser recognizes a synthetic PE32+ header.
+- The PE parser recognizes a synthetic PE32+ header and the PE mapper maps a synthetic `.text` section while rejecting out-of-file raw data.
 - GitHub Actions runs host-native tests before attempting the Android ARM64 debug APK build.
