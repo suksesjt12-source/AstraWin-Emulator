@@ -261,8 +261,10 @@ bool test_win32_api_environment() {
     const auto set_last_error = ApiRegistry::resolve("KeRnEl32.DlL", "SetLastError");
     const auto get_last_error = ApiRegistry::resolve("kernelbase.dll", "GetLastError");
     const auto get_pid = ApiRegistry::resolve("kernel32.dll", "GetCurrentProcessId");
+    const auto get_tick_count = ApiRegistry::resolve("kernel32.dll", "GetTickCount64");
     const auto unknown = ApiRegistry::resolve("user32.dll", "MessageBoxW");
-    if (!set_last_error || !get_last_error || !get_pid || unknown) {
+    if (!set_last_error || !get_last_error || !get_pid ||
+        !get_tick_count || unknown) {
         return false;
     }
 
@@ -276,6 +278,15 @@ bool test_win32_api_environment() {
         return false;
     }
     if (!environment.invoke(*get_pid, {}, result) || result != 4242U) {
+        return false;
+    }
+    if (!environment.invoke(*get_tick_count, {}, result)) {
+        return false;
+    }
+    const auto first_tick_count = result;
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    if (!environment.invoke(*get_tick_count, {}, result) ||
+        result < first_tick_count) {
         return false;
     }
     const std::uint64_t unexpected_argument = 1U;
@@ -319,7 +330,17 @@ bool test_guest_process_lifecycle() {
     }
 
     process->start();
-    if (process->state() != ProcessState::kRunning) {
+    if (process->state() != ProcessState::kRunning ||
+        process->threads().front().state != ThreadState::kRunning) {
+        return false;
+    }
+
+    while (process->threads().size() < GuestProcess::kMaximumThreadCount) {
+        if (!process->create_thread(0x1100U, error)) {
+            return false;
+        }
+    }
+    if (process->create_thread(0x1200U, error)) {
         return false;
     }
     process->terminate(123U);
