@@ -96,6 +96,9 @@ bool GuestProcess::set_thread_state(
 void GuestProcess::start() noexcept {
     if (state_ == ProcessState::kCreated) {
         state_ = ProcessState::kRunning;
+        if (!threads_.empty() && threads_.front().state == ThreadState::kReady) {
+            threads_.front().state = ThreadState::kRunning;
+        }
     }
 }
 
