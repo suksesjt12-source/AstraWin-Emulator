@@ -10,6 +10,8 @@
 #include <filesystem>
 #include <cstdint>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,12 +51,22 @@ bool test_guest_memory() {
     astrawin::memory::GuestMemory based_memory(4U, 0x1000U);
     const std::uint8_t value = 0x5AU;
     std::uint8_t loaded_value = 0;
-    return based_memory.base_address() == 0x1000U &&
-           !based_memory.write_value(0x0FFFU, value) &&
-           based_memory.write_value(0x1002U, value) &&
-           based_memory.read_value(0x1002U, loaded_value) &&
-           loaded_value == value &&
-           !based_memory.read_value(0x0FFFU, loaded_value);
+    if (based_memory.base_address() != 0x1000U ||
+        based_memory.write_value(0x0FFFU, value) ||
+        !based_memory.write_value(0x1002U, value) ||
+        !based_memory.read_value(0x1002U, loaded_value) ||
+        loaded_value != value ||
+        based_memory.read_value(0x0FFFU, loaded_value)) {
+        return false;
+    }
+
+    try {
+        astrawin::memory::GuestMemory overflowing_memory(
+            4U, std::numeric_limits<std::uint64_t>::max() - 1U);
+        return false;
+    } catch (const std::length_error&) {
+        return true;
+    }
 }
 
 bool test_x64_interpreter() {
