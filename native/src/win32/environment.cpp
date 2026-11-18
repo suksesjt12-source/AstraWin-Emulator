@@ -43,6 +43,39 @@ bool Environment::invoke(
             return true;
         }
 
+        case ApiId::kGetTickCount: {
+            if (!arguments.empty()) {
+                last_error_ = 87U;
+                return false;
+            }
+            const auto ticks = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            result = ticks > 0
+                ? static_cast<std::uint32_t>(static_cast<std::uint64_t>(ticks))
+                : 0U;
+            return true;
+        }
+
+        case ApiId::kGetSystemTimeAsFileTime: {
+            if (arguments.size() != 1U) {
+                last_error_ = 87U; // ERROR_INVALID_PARAMETER
+                return false;
+            }
+            // FILETIME counts 100-ns intervals since 1601-01-01 UTC.
+            constexpr std::uint64_t kUnixToFileTimeEpoch =
+                116444736000000000ULL;
+            const auto unix_nanoseconds =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+            if (unix_nanoseconds < 0) {
+                result = kUnixToFileTimeEpoch;
+            } else {
+                result = kUnixToFileTimeEpoch +
+                    static_cast<std::uint64_t>(unix_nanoseconds / 100);
+            }
+            return true;
+        }
+
         case ApiId::kGetCurrentProcessId:
             if (!arguments.empty()) {
                 last_error_ = 87U;

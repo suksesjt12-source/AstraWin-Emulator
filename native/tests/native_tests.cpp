@@ -807,12 +807,15 @@ bool test_win32_api_environment() {
     const auto get_last_error = ApiRegistry::resolve("kernelbase.dll", "GetLastError");
     const auto get_pid = ApiRegistry::resolve("kernel32.dll", "GetCurrentProcessId");
     const auto get_tick_count = ApiRegistry::resolve("kernel32.dll", "GetTickCount64");
+    const auto get_tick_count32 = ApiRegistry::resolve("kernel32.dll", "GetTickCount");
+    const auto get_filetime = ApiRegistry::resolve("kernel32.dll", "GetSystemTimeAsFileTime");
     const auto get_tid = ApiRegistry::resolve("kernel32.dll", "GetCurrentThreadId");
     const auto get_process = ApiRegistry::resolve("kernel32.dll", "GetCurrentProcess");
     const auto get_thread = ApiRegistry::resolve("kernel32.dll", "GetCurrentThread");
     const auto unknown = ApiRegistry::resolve("user32.dll", "MessageBoxW");
     if (!set_last_error || !get_last_error || !get_pid ||
-        !get_tick_count || !get_tid || !get_process || !get_thread || unknown) {
+        !get_tick_count || !get_tick_count32 || !get_filetime ||
+        !get_tid || !get_process || !get_thread || unknown) {
         return false;
     }
 
@@ -837,6 +840,18 @@ bool test_win32_api_environment() {
         return false;
     }
     const auto first_tick_count = result;
+    std::uint64_t tick32 = 0U;
+    if (!environment.invoke(*get_tick_count32, {}, tick32) ||
+        tick32 > std::numeric_limits<std::uint32_t>::max()) {
+        return false;
+    }
+    std::uint64_t filetime = 0U;
+    const std::uint64_t output_pointer = 0x1000U;
+    if (!environment.invoke(*get_filetime,
+            std::span<const std::uint64_t>(&output_pointer, 1U), filetime) ||
+        filetime <= 116444736000000000ULL) {
+        return false;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
     if (!environment.invoke(*get_tick_count, {}, result) ||
         result < first_tick_count) {
@@ -861,6 +876,8 @@ bool test_win32_call_dispatcher() {
     std::uint64_t get_pid_thunk = 0U;
     std::uint64_t set_error_thunk = 0U;
     std::uint64_t get_ticks_thunk = 0U;
+    std::uint64_t get_tick32_thunk = 0U;
+    std::uint64_t get_filetime_thunk = 0U;
     std::uint64_t get_tid_thunk = 0U;
     std::uint64_t get_process_thunk = 0U;
     std::uint64_t get_thread_thunk = 0U;
@@ -875,6 +892,12 @@ bool test_win32_call_dispatcher() {
     ImportedSymbol get_ticks_import{};
     get_ticks_import.module = "kernel32.dll";
     get_ticks_import.name = "GetTickCount64";
+    ImportedSymbol get_tick32_import{};
+    get_tick32_import.module = "kernel32.dll";
+    get_tick32_import.name = "GetTickCount";
+    ImportedSymbol get_filetime_import{};
+    get_filetime_import.module = "kernel32.dll";
+    get_filetime_import.name = "GetSystemTimeAsFileTime";
     ImportedSymbol get_tid_import{};
     get_tid_import.module = "kernel32.dll";
     get_tid_import.name = "GetCurrentThreadId";
@@ -888,10 +911,12 @@ bool test_win32_call_dispatcher() {
     if (!x86_dispatcher.resolve_import(get_pid_import, get_pid_thunk, error) ||
         !x86_dispatcher.resolve_import(set_error_import, set_error_thunk, error) ||
         !x86_dispatcher.resolve_import(get_ticks_import, get_ticks_thunk, error) ||
+        !x86_dispatcher.resolve_import(get_tick32_import, get_tick32_thunk, error) ||
+        !x86_dispatcher.resolve_import(get_filetime_import, get_filetime_thunk, error) ||
         !x86_dispatcher.resolve_import(get_tid_import, get_tid_thunk, error) ||
         !x86_dispatcher.resolve_import(get_process_import, get_process_thunk, error) ||
         !x86_dispatcher.resolve_import(get_thread_import, get_thread_thunk, error) ||
-        x86_dispatcher.thunk_count() != 6U ||
+        x86_dispatcher.thunk_count() != 8U ||
         x86_dispatcher.find_thunk(get_pid_thunk) != ApiId::kGetCurrentProcessId ||
         x86_dispatcher.find_thunk(get_tid_thunk) != ApiId::kGetCurrentThreadId ||
         x86_dispatcher.find_thunk(get_process_thunk) != ApiId::kGetCurrentProcess ||
@@ -903,7 +928,7 @@ bool test_win32_call_dispatcher() {
     if (!x86_dispatcher.resolve_import(
             get_pid_import, duplicate_get_pid_thunk, error) ||
         duplicate_get_pid_thunk != get_pid_thunk ||
-        x86_dispatcher.thunk_count() != 6U) {
+        x86_dispatcher.thunk_count() != 8U) {
         return false;
     }
 
@@ -992,6 +1017,33 @@ bool test_win32_call_dispatcher() {
         !check_x86_zero_arg_api(get_thread_thunk, 176U, 0xFFFFFFFEU)) {
         return false;
     }
+    x86_state.eip = static_cast<std::uint32_t>(get_tick32_thunk);
+    x86_state.gpr[4] = x86_memory_base + 192U;
+    if (!x86_memory.write_value(x86_state.gpr[4], x86_return_address) ||
+        x86_dispatcher.step_x86(x86_state, x86_memory, x86_environment) !=
+            astrawin::cpu::x86::StepResult::kRunning ||
+        x86_state.eip != x86_return_address ||
+        x86_state.gpr[4] != x86_memory_base + 196U ||
+        x86_state.gpr[0] > std::numeric_limits<std::uint32_t>::max()) {
+        return false;
+    }
+    constexpr std::uint32_t x86_filetime_stack = x86_memory_base + 208U;
+    constexpr std::uint32_t x86_filetime_output = x86_memory_base + 232U;
+    x86_state.eip = static_cast<std::uint32_t>(get_filetime_thunk);
+    x86_state.gpr[4] = x86_filetime_stack;
+    if (!x86_memory.write_value(x86_filetime_stack, x86_return_address) ||
+        !x86_memory.write_value(x86_filetime_stack + 4U, x86_filetime_output) ||
+        x86_dispatcher.step_x86(x86_state, x86_memory, x86_environment) !=
+            astrawin::cpu::x86::StepResult::kRunning ||
+        x86_state.eip != x86_return_address ||
+        x86_state.gpr[4] != x86_filetime_stack + 8U) {
+        return false;
+    }
+    std::uint64_t x86_filetime_value = 0U;
+    if (!x86_memory.read_value(x86_filetime_output, x86_filetime_value) ||
+        x86_filetime_value <= 116444736000000000ULL) {
+        return false;
+    }
 
     // Exercise the real x86 import-call sequence: CALL [absolute IAT slot],
     // thunk dispatch, return to caller, then execute the next instruction.
@@ -1026,6 +1078,8 @@ bool test_win32_call_dispatcher() {
     CallDispatcher x64_dispatcher(true);
     std::uint64_t x64_set_error_thunk = 0U;
     std::uint64_t x64_pid_thunk = 0U;
+    std::uint64_t x64_tick32_thunk = 0U;
+    std::uint64_t x64_filetime_thunk = 0U;
     std::uint64_t x64_tid_thunk = 0U;
     std::uint64_t x64_process_thunk = 0U;
     std::uint64_t x64_thread_thunk = 0U;
@@ -1034,12 +1088,16 @@ bool test_win32_call_dispatcher() {
         !x64_dispatcher.resolve_import(
             get_pid_import, x64_pid_thunk, error) ||
         !x64_dispatcher.resolve_import(
+            get_tick32_import, x64_tick32_thunk, error) ||
+        !x64_dispatcher.resolve_import(
+            get_filetime_import, x64_filetime_thunk, error) ||
+        !x64_dispatcher.resolve_import(
             get_tid_import, x64_tid_thunk, error) ||
         !x64_dispatcher.resolve_import(
             get_process_import, x64_process_thunk, error) ||
         !x64_dispatcher.resolve_import(
             get_thread_import, x64_thread_thunk, error) ||
-        x64_dispatcher.thunk_count() != 5U ||
+        x64_dispatcher.thunk_count() != 7U ||
         x64_dispatcher.find_thunk(x64_set_error_thunk) != ApiId::kSetLastError) {
         return false;
     }
@@ -1095,6 +1153,32 @@ bool test_win32_call_dispatcher() {
                                 std::numeric_limits<std::uint64_t>::max()) ||
         !check_x64_zero_arg_api(x64_thread_thunk, x64_memory_base + 144U,
                                 std::numeric_limits<std::uint64_t>::max() - 1U)) {
+        return false;
+    }
+    x64_state.rip = x64_tick32_thunk;
+    x64_state.gpr[4] = x64_memory_base + 176U;
+    if (!x64_memory.write_value(x64_state.gpr[4], x64_return_address) ||
+        x64_dispatcher.step_x64(x64_state, x64_memory, x64_environment) !=
+            astrawin::cpu::x86_64::StepResult::kRunning ||
+        x64_state.rip != x64_return_address ||
+        x64_state.gpr[4] != x64_memory_base + 184U ||
+        x64_state.gpr[0] > std::numeric_limits<std::uint32_t>::max()) {
+        return false;
+    }
+    constexpr std::uint64_t x64_filetime_output = x64_memory_base + 232U;
+    x64_state.rip = x64_filetime_thunk;
+    x64_state.gpr[4] = x64_memory_base + 192U;
+    x64_state.gpr[1] = x64_filetime_output; // RCX = FILETIME output pointer.
+    if (!x64_memory.write_value(x64_state.gpr[4], x64_return_address) ||
+        x64_dispatcher.step_x64(x64_state, x64_memory, x64_environment) !=
+            astrawin::cpu::x86_64::StepResult::kRunning ||
+        x64_state.rip != x64_return_address ||
+        x64_state.gpr[4] != x64_memory_base + 200U) {
+        return false;
+    }
+    std::uint64_t x64_filetime_value = 0U;
+    if (!x64_memory.read_value(x64_filetime_output, x64_filetime_value) ||
+        x64_filetime_value <= 116444736000000000ULL) {
         return false;
     }
 

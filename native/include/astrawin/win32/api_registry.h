@@ -10,6 +10,8 @@ enum class ApiId {
     kGetLastError,
     kSetLastError,
     kGetTickCount64,
+    kGetTickCount,
+    kGetSystemTimeAsFileTime,
     kGetCurrentProcessId,
     kGetCurrentThreadId,
     kGetCurrentProcess,
