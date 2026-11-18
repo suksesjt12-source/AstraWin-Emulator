@@ -10,7 +10,7 @@ constexpr std::uint64_t kZeroFlag = 1ULL << 6U;
 constexpr std::size_t kStackRegister = 4U;
 
 bool fetch_u8(
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t& rip,
     std::uint8_t& value) noexcept {
     if (!memory.read_value(rip, value)) {
@@ -21,7 +21,7 @@ bool fetch_u8(
 }
 
 bool fetch_u16(
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t& rip,
     std::uint16_t& value) noexcept {
     if (!memory.read_value(rip, value)) {
@@ -32,7 +32,7 @@ bool fetch_u16(
 }
 
 bool fetch_u32(
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t& rip,
     std::uint32_t& value) noexcept {
     if (!memory.read_value(rip, value)) {
@@ -43,7 +43,7 @@ bool fetch_u32(
 }
 
 bool fetch_u64(
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t& rip,
     std::uint64_t& value) noexcept {
     if (!memory.read_value(rip, value)) {
@@ -55,7 +55,7 @@ bool fetch_u64(
 
 bool push_u64(
     CpuState& state,
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t value) noexcept {
     const auto stack_pointer = state.gpr[kStackRegister];
     if (stack_pointer < sizeof(value)) {
@@ -71,7 +71,7 @@ bool push_u64(
 
 bool pop_u64(
     CpuState& state,
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::uint64_t& value,
     std::uint16_t stack_adjustment = 0U) noexcept {
     const auto stack_pointer = state.gpr[kStackRegister];
@@ -120,7 +120,7 @@ void update_zero_flag(CpuState& state, std::uint64_t value) noexcept {
 
 StepResult Interpreter::step(
     CpuState& state,
-    const memory::GuestMemory& memory) const noexcept {
+    memory::GuestMemory& memory) const noexcept {
     if (state.halted) {
         return StepResult::kHalted;
     }
@@ -295,7 +295,7 @@ StepResult Interpreter::step(
 
 StepResult Interpreter::run(
     CpuState& state,
-    const memory::GuestMemory& memory,
+    memory::GuestMemory& memory,
     std::size_t max_steps) const noexcept {
     for (std::size_t index = 0; index < max_steps; ++index) {
         const auto result = step(state, memory);
