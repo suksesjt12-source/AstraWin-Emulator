@@ -76,6 +76,65 @@ bool pop_u32(
     return true;
 }
 
+bool decode_memory_address32(
+    memory::GuestMemory& memory,
+    std::uint32_t& eip,
+    const std::array<std::uint32_t, 8>& registers,
+    std::uint8_t modrm,
+    std::uint32_t& address) noexcept {
+    const auto mod = static_cast<std::uint8_t>(modrm >> 6U);
+    const auto rm = static_cast<std::uint8_t>(modrm & 0x7U);
+    if (mod == 3U) {
+        return false;
+    }
+
+    address = 0U;
+    if (rm == 4U) {
+        std::uint8_t sib = 0U;
+        if (!fetch_u8(memory, eip, sib)) {
+            return false;
+        }
+        const auto scale = static_cast<std::uint8_t>(sib >> 6U);
+        const auto index = static_cast<std::uint8_t>((sib >> 3U) & 0x7U);
+        const auto base = static_cast<std::uint8_t>(sib & 0x7U);
+        if (index != 4U) {
+            address += registers[index] << scale;
+        }
+        if (mod == 0U && base == 5U) {
+            std::uint32_t displacement = 0U;
+            if (!fetch_u32(memory, eip, displacement)) {
+                return false;
+            }
+            address += displacement;
+        } else {
+            address += registers[base];
+        }
+    } else if (mod == 0U && rm == 5U) {
+        if (!fetch_u32(memory, eip, address)) {
+            return false;
+        }
+    } else {
+        address = registers[rm];
+    }
+
+    if (mod == 1U) {
+        std::uint8_t raw_displacement = 0U;
+        if (!fetch_u8(memory, eip, raw_displacement)) {
+            return false;
+        }
+        address += static_cast<std::uint32_t>(
+            static_cast<std::int32_t>(
+                static_cast<std::int8_t>(raw_displacement)));
+    } else if (mod == 2U) {
+        std::uint32_t displacement = 0U;
+        if (!fetch_u32(memory, eip, displacement)) {
+            return false;
+        }
+        address += displacement;
+    }
+    return true;
+}
+
 void update_zero_flag(CpuState& state, std::uint32_t value) noexcept {
     if (value == 0U) {
         state.eflags |= kZeroFlag;
@@ -228,6 +287,40 @@ StepResult Interpreter::step(
             static_cast<std::int64_t>(return_address) +
             static_cast<std::int32_t>(raw_displacement));
         if (opcode == 0xE8U && !push_u32(state, memory, return_address)) {
+            return StepResult::kMemoryFault;
+        }
+        state.eip = target;
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
+    if (opcode == 0xFFU) { // CALL/JMP indirect r/m32
+        std::uint8_t modrm = 0U;
+        if (!fetch_u8(memory, state.eip, modrm)) {
+            return StepResult::kMemoryFault;
+        }
+        const auto operation = static_cast<std::uint8_t>((modrm >> 3U) & 0x7U);
+        if (operation != 2U && operation != 4U) {
+            return StepResult::kUnsupportedInstruction;
+        }
+
+        const auto mod = static_cast<std::uint8_t>(modrm >> 6U);
+        const auto rm = static_cast<std::uint8_t>(modrm & 0x7U);
+        std::uint32_t target = 0U;
+        if (mod == 3U) {
+            target = state.gpr[rm];
+        } else {
+            std::uint32_t operand_address = 0U;
+            if (!decode_memory_address32(
+                    memory, state.eip, state.gpr, modrm, operand_address) ||
+                !memory.read_value(operand_address, target)) {
+                return StepResult::kMemoryFault;
+            }
+        }
+
+        const auto return_address = state.eip;
+        if (operation == 2U &&
+            !push_u32(state, memory, return_address)) {
             return StepResult::kMemoryFault;
         }
         state.eip = target;
