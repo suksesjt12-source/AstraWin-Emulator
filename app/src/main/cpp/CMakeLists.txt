@@ -6,6 +6,7 @@ set(ASTRAWIN_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../..")
 add_library(astrawin_core STATIC
     ${ASTRAWIN_ROOT}/native/src/memory/guest_memory.cpp
     ${ASTRAWIN_ROOT}/native/src/cpu/x86_64/interpreter.cpp
+    ${ASTRAWIN_ROOT}/native/src/cpu/x86/interpreter.cpp
     ${ASTRAWIN_ROOT}/native/src/pe/pe_parser.cpp
 )
 
