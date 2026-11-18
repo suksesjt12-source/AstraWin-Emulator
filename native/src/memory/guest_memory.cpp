@@ -43,10 +43,14 @@ bool GuestMemory::read(
 bool GuestMemory::write(
     std::uint64_t address,
     std::span<const std::uint8_t> input) noexcept {
-    if (address > bytes_.size()) {
+    if (address < base_address_) {
         return false;
     }
-    const auto offset = static_cast<std::size_t>(address);
+    const auto relative_address = address - base_address_;
+    if (relative_address > bytes_.size()) {
+        return false;
+    }
+    const auto offset = static_cast<std::size_t>(relative_address);
     if (input.size() > bytes_.size() - offset) {
         return false;
     }
