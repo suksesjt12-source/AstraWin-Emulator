@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,7 @@ bool PeImageLoader::load(
     std::span<const std::uint8_t> file,
     LoadedPeImage& loaded,
     std::string& error) {
+    try {
     PeImageInfo parsed_info{};
     if (!PeParser::inspect(file, parsed_info, error)) {
         return false;
@@ -237,6 +239,10 @@ bool PeImageLoader::load(
     loaded = std::move(candidate);
     error.clear();
     return true;
+    } catch (const std::bad_alloc&) {
+        error = "Insufficient memory to map the PE image";
+        return false;
+    }
 }
 
 }  // namespace astrawin::pe
