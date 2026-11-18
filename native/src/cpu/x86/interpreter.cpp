@@ -1,11 +1,13 @@
 #include "astrawin/cpu/x86/interpreter.h"
 
 #include <cstdint>
+#include <limits>
 
 namespace astrawin::cpu::x86 {
 namespace {
 
 constexpr std::uint32_t kZeroFlag = 1U << 6U;
+constexpr std::uint32_t kStackRegister = 4U;
 
 bool fetch_u8(
     const memory::GuestMemory& memory,
@@ -18,6 +20,17 @@ bool fetch_u8(
     return true;
 }
 
+bool fetch_u16(
+    const memory::GuestMemory& memory,
+    std::uint32_t& eip,
+    std::uint16_t& value) noexcept {
+    if (!memory.read_value(eip, value)) {
+        return false;
+    }
+    eip += sizeof(value);
+    return true;
+}
+
 bool fetch_u32(
     const memory::GuestMemory& memory,
     std::uint32_t& eip,
@@ -26,6 +39,40 @@ bool fetch_u32(
         return false;
     }
     eip += sizeof(value);
+    return true;
+}
+
+bool push_u32(
+    CpuState& state,
+    const memory::GuestMemory& memory,
+    std::uint32_t value) noexcept {
+    const auto stack_pointer = state.gpr[kStackRegister];
+    if (stack_pointer < sizeof(value)) {
+        return false;
+    }
+    const auto next_stack_pointer = stack_pointer - sizeof(value);
+    if (!memory.write_value(next_stack_pointer, value)) {
+        return false;
+    }
+    state.gpr[kStackRegister] = next_stack_pointer;
+    return true;
+}
+
+bool pop_u32(
+    CpuState& state,
+    const memory::GuestMemory& memory,
+    std::uint32_t& value,
+    std::uint16_t stack_adjustment = 0U) noexcept {
+    const auto stack_pointer = state.gpr[kStackRegister];
+    const auto increment = static_cast<std::uint64_t>(sizeof(value)) +
+                           stack_adjustment;
+    if (increment > std::numeric_limits<std::uint32_t>::max() - stack_pointer) {
+        return false;
+    }
+    if (!memory.read_value(stack_pointer, value)) {
+        return false;
+    }
+    state.gpr[kStackRegister] += static_cast<std::uint32_t>(increment);
     return true;
 }
 
@@ -60,6 +107,67 @@ StepResult Interpreter::step(
         state.halted = true;
         ++state.instructions_executed;
         return StepResult::kHalted;
+    }
+
+    if (opcode >= 0x50U && opcode <= 0x57U) { // PUSH r32
+        const auto register_index = static_cast<std::size_t>(opcode - 0x50U);
+        const auto value = state.gpr[register_index];
+        if (!push_u32(state, memory, value)) {
+            return StepResult::kMemoryFault;
+        }
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
+    if (opcode >= 0x58U && opcode <= 0x5FU) { // POP r32
+        const auto register_index = static_cast<std::size_t>(opcode - 0x58U);
+        std::uint32_t value = 0;
+        if (!pop_u32(state, memory, value)) {
+            return StepResult::kMemoryFault;
+        }
+        // POP ESP replaces the incremented stack pointer with the popped value.
+        state.gpr[register_index] = value;
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
+    if (opcode == 0x68U) { // PUSH imm32
+        std::uint32_t immediate = 0;
+        if (!fetch_u32(memory, state.eip, immediate) ||
+            !push_u32(state, memory, immediate)) {
+            return StepResult::kMemoryFault;
+        }
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
+    if (opcode == 0x6AU) { // PUSH imm8 (sign-extended)
+        std::uint8_t raw_immediate = 0;
+        if (!fetch_u8(memory, state.eip, raw_immediate)) {
+            return StepResult::kMemoryFault;
+        }
+        const auto immediate = static_cast<std::uint32_t>(
+            static_cast<std::int32_t>(static_cast<std::int8_t>(raw_immediate)));
+        if (!push_u32(state, memory, immediate)) {
+            return StepResult::kMemoryFault;
+        }
+        ++state.instructions_executed;
+        return StepResult::kRunning;
+    }
+
+    if (opcode == 0xC3U || opcode == 0xC2U) { // RET / RET imm16
+        std::uint16_t stack_adjustment = 0U;
+        if (opcode == 0xC2U &&
+            !fetch_u16(memory, state.eip, stack_adjustment)) {
+            return StepResult::kMemoryFault;
+        }
+        std::uint32_t return_address = 0;
+        if (!pop_u32(state, memory, return_address, stack_adjustment)) {
+            return StepResult::kMemoryFault;
+        }
+        state.eip = return_address;
+        ++state.instructions_executed;
+        return StepResult::kRunning;
     }
 
     if (opcode >= 0xB8U && opcode <= 0xBFU) {
@@ -110,14 +218,19 @@ StepResult Interpreter::step(
         return StepResult::kRunning;
     }
 
-    if (opcode == 0xE9U) {
+    if (opcode == 0xE9U || opcode == 0xE8U) { // JMP rel32 / CALL rel32
         std::uint32_t raw_displacement = 0;
         if (!fetch_u32(memory, state.eip, raw_displacement)) {
             return StepResult::kMemoryFault;
         }
-        state.eip = static_cast<std::uint32_t>(
-            static_cast<std::int64_t>(state.eip) +
+        const auto return_address = state.eip;
+        const auto target = static_cast<std::uint32_t>(
+            static_cast<std::int64_t>(return_address) +
             static_cast<std::int32_t>(raw_displacement));
+        if (opcode == 0xE8U && !push_u32(state, memory, return_address)) {
+            return StepResult::kMemoryFault;
+        }
+        state.eip = target;
         ++state.instructions_executed;
         return StepResult::kRunning;
     }
