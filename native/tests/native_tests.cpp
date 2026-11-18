@@ -212,8 +212,8 @@ bool test_x86_stack_and_call() {
     ret_adjust_code[8] = 0U;
     ret_adjust_code[9] = 0U;
     ret_adjust_code[10] = 0xF4U;
-    ret_adjust_code[32] = 0xC2U; // RET 8 (one 64-bit stack argument)
-    ret_adjust_code[33] = 0x08U;
+    ret_adjust_code[32] = 0xC2U; // RET 4 (one 32-bit stack argument)
+    ret_adjust_code[33] = 0x04U;
     ret_adjust_code[34] = 0U;
     if (!ret_adjust_memory.write(base, ret_adjust_code)) {
         return false;
@@ -315,8 +315,8 @@ bool test_x64_stack_and_call() {
     ret_adjust_code[8] = 0U;
     ret_adjust_code[9] = 0U;
     ret_adjust_code[10] = 0xF4U;
-    ret_adjust_code[32] = 0xC2U; // RET 4
-    ret_adjust_code[33] = 0x04U;
+    ret_adjust_code[32] = 0xC2U; // RET 8 (one 64-bit stack argument)
+    ret_adjust_code[33] = 0x08U;
     ret_adjust_code[34] = 0U;
     if (!ret_adjust_memory.write(base, ret_adjust_code)) {
         return false;
