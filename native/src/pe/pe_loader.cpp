@@ -4,7 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
-#include <limits>
+#include <utility>
 
 namespace astrawin::pe {
 namespace {
