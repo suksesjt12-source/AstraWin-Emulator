@@ -12,6 +12,7 @@ AstraWin is an experimental Windows executable compatibility project for Android
 - A small Win32 API name registry and environment for four kernel32/kernelbase calls; no guest-call ABI bridge yet.
 - A basic guest process/thread lifecycle model; no scheduler, CPU context switching, or process isolation.
 - Windows drive path mapping into an Android sandbox with traversal and symlink-escape checks; no guest file I/O layer.
+- Host synchronization primitives for manual/auto-reset events and one-shot/periodic monotonic timers; they are not yet wired to Win32 wait APIs.
 - Host-native CMake tests and Android debug-APK CI workflow.
 
 ## Execution model planned
