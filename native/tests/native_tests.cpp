@@ -5,6 +5,7 @@
 #include "astrawin/filesystem/guest_path_mapper.h"
 #include "astrawin/sync/guest_event.h"
 #include "astrawin/sync/guest_timer.h"
+#include "astrawin/graphics/headless_device.h"
 #include <thread>
 #include <filesystem>
 #include <cstdint>
@@ -339,6 +340,35 @@ bool test_guest_sync_primitives() {
     return one_shot && periodic_first && periodic_second && !timer.is_armed();
 }
 
+
+bool test_graphics_device_contract() {
+    astrawin::graphics::HeadlessDevice device;
+    if (device.initialize({0U, 480U}) ||
+        !device.initialize({640U, 480U}) ||
+        device.clear({0.0F, 0.0F, 0.0F, 1.0F}) ||
+        !device.begin_frame() ||
+        device.present() ||
+        device.resize({800U, 600U})) {
+        return false;
+    }
+
+    const astrawin::graphics::ClearColor color{0.1F, 0.2F, 0.3F, 1.0F};
+    if (!device.clear(color) || !device.present() ||
+        device.presented_frames() != 1U) {
+        return false;
+    }
+
+    if (!device.resize({800U, 600U}) || !device.begin_frame() ||
+        device.clear({2.0F, 0.0F, 0.0F, 1.0F}) ||
+        !device.clear({0.0F, 0.0F, 0.0F, 1.0F}) || !device.present()) {
+        return false;
+    }
+    const auto caps = device.capabilities();
+    return caps.backend == astrawin::graphics::BackendKind::kHeadless &&
+           !caps.hardware_accelerated &&
+           device.presented_frames() == 2U;
+}
+
 }  // namespace
 
 int main() {
@@ -347,6 +377,7 @@ int main() {
     const bool process_ok = test_guest_process_lifecycle();
     const bool path_ok = test_guest_path_mapper();
     const bool sync_ok = test_guest_sync_primitives();
+    const bool graphics_ok = test_graphics_device_contract();
     const bool memory_ok = test_guest_memory();
     const bool cpu_ok = test_x64_interpreter();
     const bool x86_ok = test_x86_interpreter();
@@ -362,5 +393,6 @@ int main() {
     std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest path mapper: " << (path_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest sync primitives: " << (sync_ok ? "PASS" : "FAIL") << '\n';
-    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok && sync_ok ? 0 : 1;
+    std::cout << "Graphics device contract: " << (graphics_ok ? "PASS" : "FAIL") << '\n';
+    return memory_ok && cpu_ok && x86_ok && pe_ok && pe_load_ok && win32_ok && process_ok && path_ok && sync_ok && graphics_ok ? 0 : 1;
 }
