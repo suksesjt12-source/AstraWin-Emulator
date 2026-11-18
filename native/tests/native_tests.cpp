@@ -447,6 +447,15 @@ bool test_guest_process_lifecycle() {
     if (process->create_thread(0x00401200U, error)) {
         return false;
     }
+    auto invalid_architecture_image = image;
+    invalid_architecture_image.info.architecture =
+        static_cast<astrawin::pe::PeArchitecture>(0xFF);
+    std::string architecture_error;
+    if (GuestProcess::create(
+            80U, std::move(invalid_architecture_image), architecture_error)) {
+        return false;
+    }
+
     auto invalid_x86_image = image;
     invalid_x86_image.info.architecture = astrawin::pe::PeArchitecture::kX86;
     invalid_x86_image.info.is_64_bit = false;
@@ -630,7 +639,7 @@ int main() {
     std::cout << "x86-64 interpreter subset: " << (cpu_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "x86 interpreter subset: " << (x86_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "PE section mapping: " << (pe_load_ok ? "PASS" : "FAIL") << '\n';
-    std::cout << "PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
+    std::cout << "PE32/PE32+ header inspection: " << (pe_ok ? "PASS" : "FAIL") << '\n';
 
     std::cout << "Win32 API environment: " << (win32_ok ? "PASS" : "FAIL") << '\n';
     std::cout << "Guest process lifecycle: " << (process_ok ? "PASS" : "FAIL") << '\n';
