@@ -40,9 +40,21 @@ bool test_guest_memory() {
     astrawin::memory::GuestMemory moved_memory(std::move(image_bytes));
     std::uint8_t first = 0;
     std::uint8_t last = 0;
-    return moved_memory.size() == 3U &&
-           moved_memory.read_value(0U, first) && first == 0x90U &&
-           moved_memory.read_value(2U, last) && last == 0xCCU;
+    if (moved_memory.size() != 3U ||
+        !moved_memory.read_value(0U, first) || first != 0x90U ||
+        !moved_memory.read_value(2U, last) || last != 0xCCU) {
+        return false;
+    }
+
+    astrawin::memory::GuestMemory based_memory(4U, 0x1000U);
+    const std::uint8_t value = 0x5AU;
+    std::uint8_t loaded_value = 0;
+    return based_memory.base_address() == 0x1000U &&
+           !based_memory.write_value(0x0FFFU, value) &&
+           based_memory.write_value(0x1002U, value) &&
+           based_memory.read_value(0x1002U, loaded_value) &&
+           loaded_value == value &&
+           !based_memory.read_value(0x0FFFU, loaded_value);
 }
 
 bool test_x64_interpreter() {
@@ -317,6 +329,7 @@ bool test_guest_process_lifecycle() {
     image.info.architecture = astrawin::pe::PeArchitecture::kX64;
     image.info.is_64_bit = true;
     image.info.entry_point_rva = 0x1000U;
+    image.info.image_base = 0x00400000U;
     image.size_of_image = 0x2000U;
     image.bytes.resize(0x2000U, 0U);
     image.bytes[0x1000U] = 0xF4U;
@@ -326,15 +339,18 @@ bool test_guest_process_lifecycle() {
     if (!process || process->process_id() != 77U ||
         process->state() != ProcessState::kCreated ||
         process->threads().size() != 1U ||
-        process->threads()[0].instruction_pointer != 0x1000U) {
+        process->threads()[0].instruction_pointer != 0x00401000U ||
+        process->memory().base_address() != 0x00400000U) {
         return false;
     }
 
     std::uint8_t first_byte = 0;
-    if (!process->memory().read_value(0x1000U, first_byte) || first_byte != 0xF4U) {
+    if (!process->memory().read_value(0x00401000U, first_byte) ||
+        first_byte != 0xF4U ||
+        process->memory().read_value(0x1000U, first_byte)) {
         return false;
     }
-    const auto new_thread = process->create_thread(0x1100U, error);
+    const auto new_thread = process->create_thread(0x00401100U, error);
     if (!new_thread || *new_thread != 2U ||
         !process->set_thread_state(*new_thread, ThreadState::kRunning)) {
         return false;
@@ -347,13 +363,29 @@ bool test_guest_process_lifecycle() {
     }
 
     while (process->threads().size() < GuestProcess::kMaximumThreadCount) {
-        if (!process->create_thread(0x1100U, error)) {
+        if (!process->create_thread(0x00401100U, error)) {
             return false;
         }
     }
-    if (process->create_thread(0x1200U, error)) {
+    if (process->create_thread(0x00401200U, error)) {
         return false;
     }
+    auto invalid_x86_image = image;
+    invalid_x86_image.info.architecture = astrawin::pe::PeArchitecture::kX86;
+    invalid_x86_image.info.is_64_bit = false;
+    invalid_x86_image.info.image_base = 0xFFFFF000ULL;
+    std::string x86_range_error;
+    if (GuestProcess::create(78U, std::move(invalid_x86_image), x86_range_error)) {
+        return false;
+    }
+
+    auto overflowing_x64_image = image;
+    overflowing_x64_image.info.image_base = UINT64_MAX - 0x100U;
+    std::string x64_range_error;
+    if (GuestProcess::create(79U, std::move(overflowing_x64_image), x64_range_error)) {
+        return false;
+    }
+
     process->terminate(123U);
     if (process->state() != ProcessState::kExited ||
         process->exit_code() != 123U ||
