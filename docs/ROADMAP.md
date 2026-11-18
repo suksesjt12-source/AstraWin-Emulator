@@ -9,7 +9,7 @@ The stages are intended to run sequentially without asking for approval at every
 | 3 | Guest memory foundation and bounds checks | Bounds-checked move-initialized memory with guest virtual base; tests cover out-of-range access and address overflow |
 | 4 | x86 instruction decoder and 32-bit execution subset | Prototype implemented; limited opcodes, smoke test added |
 | 5 | x86-64 interpreter and instruction tests | Prototype implemented; instruction coverage very limited |
-| 6 | PE32/PE32+ validation, mapping and relocations | Header and section mapping with size, raw/virtual overlap, bounds and executable-entry checks; relocations/imports not implemented |
+| 6 | PE32/PE32+ validation, mapping and relocations | Header/section validation; x86 HIGHLOW and x64 DIR64 base relocation; bounded import descriptor/thunk parsing and callback-driven IAT resolution. Built-in Windows DLL resolver is not implemented |
 | 7 | Win32 API compatibility layer | Four kernel32/kernelbase calls, per-thread environment model, monotonic tick count; guest ABI bridge and broad coverage not implemented |
 | 8 | Guest process and thread model | PE ImageBase-aware guest memory/IP, move-based image ownership, architecture and x86/x64 range checks, primary-thread start, state/termination, 1024-thread cap; no scheduler/context switching |
 | 9 | Windows filesystem path mapping | Explicit drive-absolute path mapper; rejects relative/drive-relative, traversal, UNC/ADS and symlink escape; file I/O not implemented |
@@ -20,7 +20,7 @@ The stages are intended to run sequentially without asking for approval at every
 | 14 | OpenGL ES fallback renderer | Not started |
 | 15 | Audio subsystem | Not started |
 | 16 | Keyboard, touch and controller input | Not started |
-| 17 | Android launcher, executable picker and session UI | Basic diagnostic screen implemented; picker not started |
+| 17 | Android launcher, executable picker and session UI | Diagnostic screen and document picker implemented; selected EXE headers are inspected via JNI. Guest execution/session UI not implemented |
 | 18 | APK packaging, runtime permissions and asset delivery | ARM64 debug build and ABI-content verification workflow added; successful CI build still pending verification |
 | 19 | Compatibility, stability and performance test suite | Native smoke tests added; Windows app/game tests not started |
 | 20 | Final ARM64 APK release and verified compatibility report | Not started |
@@ -32,9 +32,11 @@ The stages are intended to run sequentially without asking for approval at every
 - The x86 prototype executes a synthetic MOV/ADD/HLT sequence and verifies EAX.
 - The PE parser recognizes synthetic PE32+ and PE32 headers, rejects an undersized optional header, and rejects mismatched machine/optional-header formats.
 - The PE mapper maps a synthetic .text section and rejects out-of-file raw data, overlapping raw and virtual sections, and a non-executable entry point.
+- PE32 HIGHLOW and PE32+ DIR64 relocation tests verify image-base delta application; malformed relocation blocks and rebasing without a relocation directory are rejected.
+- Import tests verify bounded module/name thunk parsing, unresolved-import reporting without a resolver, callback-driven symbol resolution and IAT patching.
 - The initial Win32 environment resolves and exercises GetLastError, SetLastError, GetTickCount64, and GetCurrentProcessId; tick count is checked for monotonicity.
 - Guest process tests verify ImageBase-aware image memory and entrypoints, main/secondary thread lifecycle, primary-thread start state, termination, the thread-count cap, invalid architecture metadata, and x86/x64 address-range overflow.
 - Guest path mapper tests verify drive mapping and reject relative/drive-relative paths, traversal, alternate streams, UNC paths, and symlink escape.
 - Guest sync tests verify manual/auto-reset events and one-shot/periodic timer behavior, including very large input durations.
 - Graphics tests verify device initialization, frame lifecycle, resize rules and clear-color bounds using the headless backend.
-- GitHub Actions installs pinned Android SDK/NDK/CMake versions, runs native tests with ASan/UBSan, builds the Android ARM64 debug APK, and verifies the APK contains only the expected ARM64 native library. CI run success has not yet been confirmed.
+- GitHub Actions installs pinned Android SDK/NDK/CMake versions, runs native tests with ASan/UBSan, builds the Android ARM64 debug APK, and verifies the APK contains only the expected ARM64 native library. The most recent CI result must be checked against the commit being evaluated.
