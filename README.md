@@ -4,7 +4,7 @@ AstraWin is a from-scratch experimental Windows executable compatibility project
 
 ## Project status
 
-This repository contains an Android/JNI shell, native C++20 core, bounds-checked guest memory, small x86 and x86-64 interpreter prototypes, and PE32/PE32+ header inspection. The supported CPU instruction subsets are intentionally tiny and are only smoke-test foundations. AstraWin cannot yet load or run ordinary Windows applications or games. The Win32 API, process model, DirectX translation, Vulkan/OpenGL ES renderer, audio, and full input stack are not implemented.
+This repository contains an Android/JNI shell, native C++20 core, bounds-checked guest memory, small x86 and x86-64 interpreter prototypes, PE32/PE32+ header inspection, and a bounded PE section mapper. The loader does not yet apply base relocations or resolve imports. The supported CPU instruction subsets are intentionally tiny and are only smoke-test foundations. AstraWin cannot yet load or run ordinary Windows applications or games. The Win32 API, process model, DirectX translation, Vulkan/OpenGL ES renderer, audio, and full input stack are not implemented.
 
 See the [architecture notes](docs/ARCHITECTURE.md) and [20-stage roadmap](docs/ROADMAP.md).
 
