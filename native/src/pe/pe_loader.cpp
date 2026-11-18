@@ -181,12 +181,13 @@ bool apply_relocations(
     std::uint64_t actual_base,
     std::string& error) {
     const auto preferred_base = image.preferred_image_base;
-    if (actual_base == preferred_base) {
-        return true;
-    }
+    const bool image_moved = actual_base != preferred_base;
     if (!directory.present()) {
-        error = "Image requires relocation but has no base-relocation directory";
-        return false;
+        if (image_moved) {
+            error = "Image requires relocation but has no base-relocation directory";
+            return false;
+        }
+        return true;
     }
 
     const auto image_bytes =
@@ -335,7 +336,6 @@ bool resolve_imports(
             return false;
         }
 
-        ImportedSymbol module_probe{};
         std::string module_name;
         if (!read_ascii_string(image_bytes, name_rva, module_name) ||
             module_name.empty()) {
